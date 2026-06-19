@@ -1,0 +1,16 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  background: #f7f7f7;
+  color: #333;
+  -webkit-font-smoothing: antialiased;
+}
+/* JD brand red */
+.jd-red { color: #e1251b; }
+.jd-bg-red { background: #e1251b; }
+.price { color: #e1251b; font-weight: bold; }
+.price-small { color: #e1251b; }
+img { display: block; }
+ul, li { list-style: none; }
+a { text-decoration: none; color: inherit; }
+.app-wrap { max-width: 750px; margin: 0 auto; min-height: 100vh; background: #f7f7f7; padding-bottom: 50px; }
