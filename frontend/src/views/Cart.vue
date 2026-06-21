@@ -83,8 +83,7 @@ function fmt(n) {
       <van-button type="danger" round @click="router.push('/home')">去逛逛</van-button>
     </van-empty>
     <div v-else>
-      <van-checkbox-group v-model="dummy">
-        <div v-for="it in items" :key="it.id" class="cart-item">
+      <div v-for="it in items" :key="it.id" class="cart-item">
           <van-checkbox :model-value="it.selected === 1" @click="toggleSelect(it)" />
           <van-image width="80" height="80" radius="6" :src="it.product_image" fit="cover" @click="router.push('/product/' + it.product_id)" />
           <div class="ci-info">
@@ -96,7 +95,6 @@ function fmt(n) {
             </div>
           </div>
         </div>
-      </van-checkbox-group>
 
       <van-submit-bar :price="selectedTotal * 100" button-text="结算" @submit="checkout">
         <van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox>
