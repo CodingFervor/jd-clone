@@ -27,6 +27,8 @@ type Handler struct {
 	SKU      *repository.SKURepo
 	Payment  *repository.PaymentRepo
 	Shipment *repository.ShipmentRepo
+	Refund   *repository.RefundRepo
+	Coupon   *repository.CouponRepo
 	jwtKey   []byte
 }
 
@@ -69,11 +71,17 @@ func (h *Handler) signature(header, payload string) string {
 
 // currentUserID reads the auth header and returns the user id; on failure it
 // aborts with 401 and returns false.
-func (h *Handler) currentUserID(c *gin.Context) (int64, bool) {
+// currentUserID returns the user id from the bearer token. When optional is
+// true, a missing/invalid token returns (0, true) instead of 401 — used by
+// endpoints that serve both anonymous and authenticated users (e.g. coupons).
+func (h *Handler) currentUserID(c *gin.Context, optional ...bool) (int64, bool) {
 	auth := c.GetHeader("Authorization")
 	tok := strings.TrimPrefix(auth, "Bearer ")
 	uid, _, ok := h.parseToken(tok)
 	if !ok {
+		if len(optional) > 0 && optional[0] {
+			return 0, true
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return 0, false
 	}

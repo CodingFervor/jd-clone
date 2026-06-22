@@ -68,6 +68,19 @@ export const uploadImage = (file) => {
   return http.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 }).then((r) => r.data)
 }
 
+// ---- Refunds ----
+export const createRefund = (orderId, reason, type) => http.post('/refunds', { order_id: orderId, reason, type }).then((r) => r.data.data)
+export const getRefunds = () => http.get('/refunds').then((r) => r.data.data)
+
+// ---- Coupons ----
+export const getCoupons = () => http.get('/coupons').then((r) => r.data.data)
+export const claimCoupon = (id) => http.post(`/coupons/${id}/claim`).then((r) => r.data)
+export const getMyCoupons = () => http.get('/coupons/mine').then((r) => r.data.data)
+
+// ---- FTS Search ----
+export const ftsSearch = (q) => http.get('/search', { params: { q } }).then((r) => r.data)
+export const ftsSuggest = (q) => http.get('/search/suggest', { params: { q } }).then((r) => r.data.data)
+
 // ---- Payment ----
 export const createPayment = (orderId, method) => http.post('/payments', { order_id: orderId, method }).then((r) => r.data)
 export const confirmPayment = (id) => http.post(`/payments/${id}/confirm`).then((r) => r.data)

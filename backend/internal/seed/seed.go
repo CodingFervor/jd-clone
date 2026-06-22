@@ -126,5 +126,26 @@ func Run(db *sql.DB) {
 		}
 	}
 
+	// Seed coupons.
+	var couponCount int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM coupons`).Scan(&couponCount)
+	if couponCount == 0 {
+		coupons := []model.Coupon{
+			{Title: "满100减10元", CouponType: "deduct", Threshold: 100, Value: 10, TotalCount: 1000, StartDate: "2026-01-01", EndDate: "2026-12-31"},
+			{Title: "满500减50元", CouponType: "deduct", Threshold: 500, Value: 50, TotalCount: 500, StartDate: "2026-01-01", EndDate: "2026-12-31"},
+			{Title: "满2000减200元", CouponType: "deduct", Threshold: 2000, Value: 200, TotalCount: 200, StartDate: "2026-01-01", EndDate: "2026-12-31"},
+			{Title: "数码电器8折券", CouponType: "discount", Threshold: 0, Value: 0.8, TotalCount: 300, StartDate: "2026-01-01", EndDate: "2026-12-31"},
+			{Title: "美妆个护满300减30", CouponType: "deduct", Threshold: 300, Value: 30, TotalCount: 800, StartDate: "2026-01-01", EndDate: "2026-12-31"},
+		}
+		for _, cp := range coupons {
+			_, _ = db.Exec(`INSERT INTO coupons (title, coupon_type, threshold, value, total_count, start_date, end_date, status) VALUES (?,?,?,?,?,?,?,?)`,
+				cp.Title, cp.CouponType, cp.Threshold, cp.Value, cp.TotalCount, cp.StartDate, cp.EndDate, "active")
+		}
+	}
+
+	// Rebuild FTS5 index for existing products (the FTS table is created fresh,
+	// so pre-existing product rows won't have been indexed by the triggers).
+	_, _ = db.Exec(`INSERT INTO products_fts(products_fts) VALUES('rebuild')`)
+
 	log.Println("seed: mock data ensured")
 }

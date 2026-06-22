@@ -47,6 +47,11 @@ func main() {
 		repository.NewPaymentRepo(db.DB),
 		repository.NewShipmentRepo(db.DB),
 	)
+	// Attach the Refund / Coupon after-sale repos.
+	h.SetAfterSale(
+		repository.NewRefundRepo(db.DB),
+		repository.NewCouponRepo(db.DB),
+	)
 
 	// Ensure the images directory exists for the static file server.
 	_ = os.MkdirAll("data/images", 0o755)

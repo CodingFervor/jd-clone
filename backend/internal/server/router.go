@@ -33,6 +33,10 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		api.GET("/products/:id/reviews", h.ListReviews)
 		api.GET("/products/:id/skus", h.ListSKUs)
 
+		// Public FTS5 search + suggest
+		api.GET("/search", h.FtsSearch)
+		api.GET("/search/suggest", h.FtsSuggest)
+
 		// Public shipment tracking by tracking number
 		api.GET("/shipments/track", h.TrackByNo)
 
@@ -67,6 +71,16 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 
 			// Image upload (used by admin product form + review photos)
 			auth.POST("/upload", h.UploadImage)
+
+			// After-sale refunds
+			auth.POST("/refunds", h.CreateRefund)
+			auth.GET("/refunds", h.ListRefunds)
+			auth.POST("/refunds/:id/approve", h.ApproveRefund)
+
+			// Coupons
+			auth.GET("/coupons", h.ListCoupons)
+			auth.POST("/coupons/:id/claim", h.ClaimCoupon)
+			auth.GET("/coupons/mine", h.ListMyCoupons)
 
 			// Admin product management
 			auth.POST("/admin/products", h.AdminCreateProduct)

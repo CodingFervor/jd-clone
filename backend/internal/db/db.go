@@ -161,6 +161,61 @@ func createTables() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id)`,
+		// Refunds: after-sale return/refund requests.
+		`CREATE TABLE IF NOT EXISTS refunds (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			order_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			reason TEXT NOT NULL DEFAULT '',
+			type TEXT NOT NULL DEFAULT 'refund', -- refund_only (仅退款), return_refund (退货退款)
+			amount REAL NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, rejected, completed
+			admin_note TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_refunds_user ON refunds(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_refunds_order ON refunds(order_id)`,
+		// Coupons: discount coupons claimable by users.
+		`CREATE TABLE IF NOT EXISTS coupons (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL,
+			coupon_type TEXT NOT NULL DEFAULT 'deduct', -- deduct (满减), discount (折扣)
+			threshold REAL NOT NULL DEFAULT 0,     -- 满 threshold 元可用
+			value REAL NOT NULL DEFAULT 0,         -- deduct: 减金额; discount: 折扣(0.8=8折)
+			total_count INTEGER NOT NULL DEFAULT 0,
+			claimed_count INTEGER NOT NULL DEFAULT 0,
+			start_date TEXT NOT NULL DEFAULT '',
+			end_date TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'active',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		// User-coupon associations (领取记录).
+		`CREATE TABLE IF NOT EXISTS user_coupons (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			coupon_id INTEGER NOT NULL,
+			is_used INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, coupon_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_coupons_user ON user_coupons(user_id)`,
+		// FTS5 full-text search virtual table over products.
+		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
+		// Triggers to keep the FTS index in sync with products.
+		`CREATE TRIGGER IF NOT EXISTS products_ai AFTER INSERT ON products BEGIN
+			INSERT INTO products_fts(rowid, name, subtitle, category, tags, description)
+			VALUES (new.id, new.name, new.subtitle, new.category, new.tags, new.description);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS products_ad AFTER DELETE ON products BEGIN
+			INSERT INTO products_fts(products_fts, rowid, name, subtitle, category, tags, description)
+			VALUES ('delete', old.id, old.name, old.subtitle, old.category, old.tags, old.description);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS products_au AFTER UPDATE ON products BEGIN
+			INSERT INTO products_fts(products_fts, rowid, name, subtitle, category, tags, description)
+			VALUES ('delete', old.id, old.name, old.subtitle, old.category, old.tags, old.description);
+			INSERT INTO products_fts(rowid, name, subtitle, category, tags, description)
+			VALUES (new.id, new.name, new.subtitle, new.category, new.tags, new.description);
+		END`,
 	}
 	for _, s := range stmts {
 		if _, err := DB.Exec(s); err != nil {

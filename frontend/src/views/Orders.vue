@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getOrders, payOrder } from '../api'
+import { getOrders, payOrder, createRefund } from '../api'
 
 const router = useRouter()
 const orders = ref([])
@@ -24,6 +24,16 @@ async function pay(o) {
 }
 function viewLogistics(o) {
   router.push({ name: 'logistics', query: { order_id: o.id } })
+}
+async function applyRefund(o) {
+  const reason = window.prompt('请输入退款原因')
+  if (!reason || !reason.trim()) return
+  try {
+    await createRefund(o.id, reason, 'refund_only')
+    showSuccessToast('退款申请已提交')
+  } catch (e) {
+    showToast(e.response?.data?.error || '申请失败')
+  }
 }
 function statusText(s) {
   return { pending: '待付款', paid: '已付款', shipped: '已发货', completed: '已完成', cancelled: '已取消' }[s] || s
@@ -62,7 +72,8 @@ function parseItems(json) {
           <span>共 {{ parseItems(o.items_json).length }} 件 合计: <b class="price">¥{{ fmt(o.total) }}</b></span>
           <div class="o-actions">
             <van-button v-if="o.status === 'pending'" size="small" type="danger" round @click="pay(o)">去支付</van-button>
-            <van-button v-if="o.status === 'paid' || o.status === 'shipped' || o.status === 'completed'" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
+            <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
+            <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请退款</van-button>
           </div>
         </div>
       </div>
