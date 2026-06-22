@@ -16,6 +16,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 
 	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 
+	// Serve uploaded images from the local data/images directory.
+	r.Static("/images", "data/images")
+
 	api := r.Group("/api/v1")
 	{
 		// Public auth
@@ -61,6 +64,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			auth.POST("/reviews", h.CreateReview)
 
 			auth.GET("/addresses", h.ListAddresses)
+
+			// Image upload (used by admin product form + review photos)
+			auth.POST("/upload", h.UploadImage)
 
 			// Admin product management
 			auth.POST("/admin/products", h.AdminCreateProduct)

@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,6 +14,18 @@ const loading = ref(true)
 const showReview = ref(false)
 const reviewRating = ref(5)
 const reviewContent = ref('')
+const reviewImages = ref([])
+async function onUploadReviewImage(item) {
+  try {
+    const res = await uploadImage(item.file)
+    reviewImages.value.push(res.url)
+  } catch (e) {
+    showToast('图片上传失败')
+  }
+}
+function removeReviewImage(idx) {
+  reviewImages.value.splice(idx, 1)
+}
 
 onMounted(async () => {
   try {
@@ -72,6 +84,7 @@ async function submitReview() {
     reviews.value.unshift(rv)
     showReview.value = false
     reviewContent.value = ''
+    reviewImages.value = []
     showSuccessToast('评价成功')
   } catch (e) {
     showToast('请先登录')
@@ -146,6 +159,17 @@ function fmt(n) {
         <h3>写评价</h3>
         <van-rate v-model="reviewRating" />
         <van-field v-model="reviewContent" type="textarea" placeholder="说说你的使用感受" rows="3" />
+        <div class="rev-upload">
+          <van-uploader :after-read="onUploadReviewImage" accept="image/*" multiple :preview-image="false">
+            <van-button icon="photo-o" size="small" plain round>添加晒图</van-button>
+          </van-uploader>
+          <div v-if="reviewImages.length" class="rev-imgs">
+            <div v-for="(img, i) in reviewImages" :key="i" class="rev-img-wrap">
+              <van-image width="60" height="60" radius="6" :src="img" fit="cover" />
+              <van-icon name="cross" class="rev-img-del" @click="removeReviewImage(i)" />
+            </div>
+          </div>
+        </div>
         <van-button type="danger" block @click="submitReview">提交评价</van-button>
       </div>
     </van-popup>
@@ -176,4 +200,8 @@ function fmt(n) {
 .rev-form { padding: 20px; }
 .rev-form h3 { text-align: center; margin-bottom: 16px; }
 .rev-form .van-field { margin: 12px 0; border: 1px solid #eee; }
+.rev-upload { margin: 8px 0; }
+.rev-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.rev-img-wrap { position: relative; }
+.rev-img-del { position: absolute; top: -6px; right: -6px; background: #e1251b; color: #fff; border-radius: 50%; padding: 2px; font-size: 12px; }
 </style>

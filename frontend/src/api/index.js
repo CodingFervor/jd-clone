@@ -61,6 +61,13 @@ export const adminDeleteProduct = (id) => http.delete(`/admin/products/${id}`).t
 export const getSKUs = (productId) => http.get(`/products/${productId}/skus`).then((r) => r.data.data)
 export const createSKU = (productId, payload) => http.post(`/admin/products/${productId}/skus`, payload).then((r) => r.data)
 
+// ---- Image upload (multipart) ----
+export const uploadImage = (file) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return http.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 }).then((r) => r.data)
+}
+
 // ---- Payment ----
 export const createPayment = (orderId, method) => http.post('/payments', { order_id: orderId, method }).then((r) => r.data)
 export const confirmPayment = (id) => http.post(`/payments/${id}/confirm`).then((r) => r.data)

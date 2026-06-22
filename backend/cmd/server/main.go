@@ -48,6 +48,9 @@ func main() {
 		repository.NewShipmentRepo(db.DB),
 	)
 
+	// Ensure the images directory exists for the static file server.
+	_ = os.MkdirAll("data/images", 0o755)
+
 	r := server.New(h, cfg.AllowedOrigins)
 	addr := ":" + strconv.Itoa(cfg.Port)
 	srv := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 10 * time.Second}
