@@ -117,6 +117,50 @@ func createTables() error {
 			detail TEXT NOT NULL,
 			is_default INTEGER NOT NULL DEFAULT 0
 		)`,
+		// SKU: a specific spec combination (color/size/version) of a product.
+		`CREATE TABLE IF NOT EXISTS skus (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			product_id INTEGER NOT NULL,
+			spec TEXT NOT NULL,             -- JSON, e.g. {"颜色":"黑色","版本":"256GB"}
+			spec_text TEXT NOT NULL DEFAULT '', -- display string "黑色 256GB"
+			price REAL NOT NULL,
+			stock INTEGER NOT NULL DEFAULT 0,
+			sku_code TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_skus_product ON skus(product_id)`,
+		// Shipments: a shipped order's logistics envelope.
+		`CREATE TABLE IF NOT EXISTS shipments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			order_id INTEGER NOT NULL,
+			tracking_no TEXT NOT NULL,
+			carrier TEXT NOT NULL DEFAULT '京东快递',
+			status TEXT NOT NULL DEFAULT 'shipped', -- pending, shipped, in_transit, delivered
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_shipments_order ON shipments(order_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_shipments_tracking ON shipments(tracking_no)`,
+		// Shipment tracks: chronological logistics events.
+		`CREATE TABLE IF NOT EXISTS shipment_tracks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			shipment_id INTEGER NOT NULL,
+			description TEXT NOT NULL,
+			location TEXT NOT NULL DEFAULT '',
+			occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_tracks_shipment ON shipment_tracks(shipment_id)`,
+		// Payments: a record of a payment attempt per order.
+		`CREATE TABLE IF NOT EXISTS payments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			order_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			amount REAL NOT NULL,
+			method TEXT NOT NULL DEFAULT 'wechat', -- wechat, alipay, unionpay
+			transaction_no TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'pending', -- pending, success, failed
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id)`,
 	}
 	for _, s := range stmts {
 		if _, err := DB.Exec(s); err != nil {

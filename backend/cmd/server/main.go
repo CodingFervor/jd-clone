@@ -41,6 +41,12 @@ func main() {
 		repository.NewReviewRepo(db.DB),
 		repository.NewAddressRepo(db.DB),
 	)
+	// Attach the SKU / Payment / Shipment enhancement repos.
+	h.SetEnhance(
+		repository.NewSKURepo(db.DB),
+		repository.NewPaymentRepo(db.DB),
+		repository.NewShipmentRepo(db.DB),
+	)
 
 	r := server.New(h, cfg.AllowedOrigins)
 	addr := ":" + strconv.Itoa(cfg.Port)

@@ -17,14 +17,17 @@ import (
 
 // Handler bundles all repositories and shares the JWT secret.
 type Handler struct {
-	User    *repository.UserRepo
-	Cat     *repository.CategoryRepo
-	Product *repository.ProductRepo
-	Cart    *repository.CartRepo
-	Order   *repository.OrderRepo
-	Review  *repository.ReviewRepo
-	Address *repository.AddressRepo
-	jwtKey  []byte
+	User     *repository.UserRepo
+	Cat      *repository.CategoryRepo
+	Product  *repository.ProductRepo
+	Cart     *repository.CartRepo
+	Order    *repository.OrderRepo
+	Review   *repository.ReviewRepo
+	Address  *repository.AddressRepo
+	SKU      *repository.SKURepo
+	Payment  *repository.PaymentRepo
+	Shipment *repository.ShipmentRepo
+	jwtKey   []byte
 }
 
 func New(jwtSecret string, u *repository.UserRepo, c *repository.CategoryRepo, p *repository.ProductRepo,

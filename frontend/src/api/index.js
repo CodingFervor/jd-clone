@@ -57,4 +57,19 @@ export const adminCreateProduct = (payload) => http.post('/admin/products', payl
 export const adminUpdateProduct = (id, payload) => http.put(`/admin/products/${id}`, payload).then((r) => r.data)
 export const adminDeleteProduct = (id) => http.delete(`/admin/products/${id}`).then((r) => r.data)
 
+// ---- SKU ----
+export const getSKUs = (productId) => http.get(`/products/${productId}/skus`).then((r) => r.data.data)
+export const createSKU = (productId, payload) => http.post(`/admin/products/${productId}/skus`, payload).then((r) => r.data)
+
+// ---- Payment ----
+export const createPayment = (orderId, method) => http.post('/payments', { order_id: orderId, method }).then((r) => r.data)
+export const confirmPayment = (id) => http.post(`/payments/${id}/confirm`).then((r) => r.data)
+export const getPayment = (orderId) => http.get(`/payments/order/${orderId}`).then((r) => r.data.payment)
+
+// ---- Shipment ----
+export const shipOrder = (orderId) => http.post(`/orders/${orderId}/ship`).then((r) => r.data)
+export const trackOrder = (orderId) => http.get(`/orders/${orderId}/track`).then((r) => r.data.shipment)
+export const advanceShipment = (orderId) => http.post(`/orders/${orderId}/ship/advance`).then((r) => r.data.shipment)
+export const trackByNo = (no) => http.get(`/shipments/track`, { params: { no } }).then((r) => r.data.shipment)
+
 export { errMsg }

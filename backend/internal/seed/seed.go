@@ -15,6 +15,7 @@ func Run(db *sql.DB) {
 	catRepo := repository.NewCategoryRepo(db)
 	prodRepo := repository.NewProductRepo(db)
 	reviewRepo := repository.NewReviewRepo(db)
+	skuRepo := repository.NewSKURepo(db)
 
 	// Seed users if none exist.
 	if u, _ := userRepo.FindByUsername("admin"); u == nil && !userRepo.Exists("admin") {
@@ -97,6 +98,31 @@ func Run(db *sql.DB) {
 		}
 		for _, rv := range reviews {
 			_ = reviewRepo.Create(&rv)
+		}
+	}
+
+	// Seed SKUs for a few flagship products (color/storage variants).
+	var skuCount int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM skus`).Scan(&skuCount)
+	if skuCount == 0 {
+		skus := []model.SKU{
+			// iPhone 15 Pro Max (product 1): color × storage
+			{ProductID: 1, Spec: `{"颜色":"原色钛金属","存储":"256GB"}`, SpecText: "原色钛金属 256GB", Price: 9999, Stock: 200, SKUCode: "IP15PM-ND-256"},
+			{ProductID: 1, Spec: `{"颜色":"原色钛金属","存储":"512GB"}`, SpecText: "原色钛金属 512GB", Price: 11999, Stock: 150, SKUCode: "IP15PM-ND-512"},
+			{ProductID: 1, Spec: `{"颜色":"蓝色钛金属","存储":"256GB"}`, SpecText: "蓝色钛金属 256GB", Price: 9999, Stock: 180, SKUCode: "IP15PM-BL-256"},
+			{ProductID: 1, Spec: `{"颜色":"蓝色钛金属","存储":"512GB"}`, SpecText: "蓝色钛金属 512GB", Price: 11999, Stock: 120, SKUCode: "IP15PM-BL-512"},
+			// Huawei Mate 60 Pro (product 2)
+			{ProductID: 2, Spec: `{"颜色":"雅丹黑","存储":"512GB"}`, SpecText: "雅丹黑 512GB", Price: 6999, Stock: 200, SKUCode: "M60P-BK-512"},
+			{ProductID: 2, Spec: `{"颜色":"雅川青","存储":"512GB"}`, SpecText: "雅川青 512GB", Price: 6999, Stock: 160, SKUCode: "M60P-CY-512"},
+			{ProductID: 2, Spec: `{"颜色":"白沙南","存储":"1TB"}`, SpecText: "白沙南 1TB", Price: 7999, Stock: 90, SKUCode: "M60P-WH-1T"},
+			// Nike AF1 (product 10)
+			{ProductID: 10, Spec: `{"颜色":"白色","尺码":"41"}`, SpecText: "白色 41码", Price: 699, Stock: 80, SKUCode: "AF1-WH-41"},
+			{ProductID: 10, Spec: `{"颜色":"白色","尺码":"42"}`, SpecText: "白色 42码", Price: 699, Stock: 100, SKUCode: "AF1-WH-42"},
+			{ProductID: 10, Spec: `{"颜色":"白色","尺码":"43"}`, SpecText: "白色 43码", Price: 699, Stock: 70, SKUCode: "AF1-WH-43"},
+			{ProductID: 10, Spec: `{"颜色":"黑色","尺码":"42"}`, SpecText: "黑色 42码", Price: 699, Stock: 60, SKUCode: "AF1-BK-42"},
+		}
+		for _, s := range skus {
+			_ = skuRepo.Create(&s)
 		}
 	}
 
