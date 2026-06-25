@@ -77,9 +77,11 @@ function logout() {
     <van-cell-group inset title="常用功能">
       <van-cell title="购物车" :value="cartCount + '件'" is-link @click="router.push('/cart')" icon="cart-o" />
       <van-cell title="我的订单" is-link @click="router.push('/orders')" icon="orders-o" />
+      <van-cell title="我的收藏" is-link @click="router.push('/favorites')" icon="star-o" />
       <van-cell title="售后服务" is-link @click="router.push('/refunds')" icon="after-sale" />
       <van-cell title="优惠券" is-link @click="router.push('/coupons')" icon="coupon-o" />
-      <van-cell title="收货地址" is-link icon="location-o" @click="showToast('演示功能')" />
+      <van-cell title="收货地址" is-link icon="location-o" @click="router.push('/addresses')" />
+      <van-cell title="编辑资料" is-link icon="edit" @click="router.push('/profile')" />
       <van-cell title="PLUS会员" is-link icon="diamond-o" @click="showToast('演示功能')" />
       <van-cell title="管理后台" is-link @click="router.push('/admin')" icon="setting-o" />
     </van-cell-group>

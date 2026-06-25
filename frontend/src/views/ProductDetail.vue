@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,6 +15,7 @@ const showReview = ref(false)
 const reviewRating = ref(5)
 const reviewContent = ref('')
 const reviewImages = ref([])
+const favorited = ref(false)
 async function onUploadReviewImage(item) {
   try {
     const res = await uploadImage(item.file)
@@ -33,12 +34,26 @@ onMounted(async () => {
     product.value = res.data
     reviews.value = res.reviews || []
     skus.value = res.skus || []
+    if (localStorage.getItem('jd_token')) {
+      favorited.value = await checkFavorite(route.params.id)
+    }
   } catch (e) {
     showToast('商品不存在')
   } finally {
     loading.value = false
   }
 })
+
+async function doFavorite() {
+  if (!checkLogin()) return
+  try {
+    const res = await toggleFavorite(product.value.id)
+    favorited.value = res.favorited
+    showSuccessToast(res.favorited ? '已收藏' : '已取消收藏')
+  } catch (e) {
+    showToast(e.response?.data?.error || '操作失败')
+  }
+}
 
 function selectSKU(sku) {
   selectedSKU.value = sku
@@ -148,6 +163,7 @@ function fmt(n) {
     <!-- Bottom action bar -->
     <van-action-bar>
       <van-action-bar-icon icon="chat-o" text="客服" @click="showToast('客服功能为演示')" />
+      <van-action-bar-icon :icon="favorited ? 'star' : 'star-o'" :text="favorited ? '已收藏' : '收藏'" :color="favorited ? '#e1251b' : '#323233'" @click="doFavorite" />
       <van-action-bar-icon icon="cart-o" text="购物车" @click="router.push('/cart')" />
       <van-action-bar-button color="#ff976a" type="warning" text="加入购物车" @click="doAddCart" />
       <van-action-bar-button color="#e1251b" type="danger" text="立即购买" @click="buyNow" />

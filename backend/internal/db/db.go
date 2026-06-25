@@ -199,6 +199,15 @@ func createTables() error {
 			UNIQUE(user_id, coupon_id)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_coupons_user ON user_coupons(user_id)`,
+		// Favorites: products a user has favorited (wishlist).
+		`CREATE TABLE IF NOT EXISTS favorites (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			product_id INTEGER NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, product_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.

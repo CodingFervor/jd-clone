@@ -89,6 +89,18 @@ type Address struct {
 	IsDefault int    `json:"is_default"`
 }
 
+// Favorite is a user's favorited product (wishlist entry).
+type Favorite struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	ProductID int64     `json:"product_id"`
+	CreatedAt time.Time `json:"created_at"`
+	// Joined product fields (populated for list responses).
+	ProductName string  `json:"product_name" db:"p_name"`
+	ProductImg  string  `json:"product_image" db:"p_image"`
+	Price       float64 `json:"price" db:"p_price"`
+}
+
 // SKU is a specific spec combination (color/size/version) of a product.
 type SKU struct {
 	ID        int64   `json:"id"`
@@ -206,6 +218,19 @@ type CreateReviewRequest struct {
 	ProductID int64  `json:"product_id" binding:"required"`
 	Rating    int    `json:"rating"`
 	Content   string `json:"content"`
+}
+
+type AddressInput struct {
+	Name      string `json:"name" binding:"required"`
+	Phone     string `json:"phone" binding:"required"`
+	Detail    string `json:"detail" binding:"required"`
+	IsDefault int    `json:"is_default"`
+}
+
+type ProfileInput struct {
+	Nickname string `json:"nickname"`
+	Avatar   string `json:"avatar"`
+	Phone    string `json:"phone"`
 }
 
 type ProductInput struct {

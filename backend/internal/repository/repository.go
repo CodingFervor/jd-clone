@@ -54,6 +54,21 @@ func (r *UserRepo) Exists(username string) bool {
 	return n == 1
 }
 
+// UpdateProfile edits a user's mutable profile fields (nickname/avatar/phone).
+func (r *UserRepo) UpdateProfile(u *model.User) error {
+	res, err := r.db.Exec(
+		`UPDATE users SET nickname=?, avatar=?, phone=? WHERE id=?`,
+		u.Nickname, u.Avatar, u.Phone, u.ID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // ===================== Category =====================
 
 type CategoryRepo struct{ db *sql.DB }
@@ -336,6 +351,22 @@ func (r *OrderRepo) UpdateStatus(id, userID int64, status string) error {
 	return err
 }
 
+// ConfirmReceipt completes a delivered order (确认收货). Only an order in
+// 'shipped' or 'in_transit' state may be confirmed.
+func (r *OrderRepo) ConfirmReceipt(id, userID int64) error {
+	res, err := r.db.Exec(
+		`UPDATE orders SET status='completed' WHERE id=? AND user_id=? AND status IN ('shipped','in_transit')`,
+		id, userID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("当前订单状态不允许确认收货")
+	}
+	return nil
+}
+
 // ===================== Review =====================
 
 type ReviewRepo struct{ db *sql.DB }
@@ -395,6 +426,141 @@ func (r *AddressRepo) List(userID int64) ([]model.Address, error) {
 		}
 	}
 	return out, nil
+}
+
+func (r *AddressRepo) Get(id, userID int64) (*model.Address, error) {
+	a := &model.Address{}
+	err := r.db.QueryRow(
+		`SELECT id, user_id, name, phone, detail, is_default FROM addresses WHERE id=? AND user_id=?`, id, userID,
+	).Scan(&a.ID, &a.UserID, &a.Name, &a.Phone, &a.Detail, &a.IsDefault)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return a, err
+}
+
+// Create adds an address. If is_default, all other addresses for the user are
+// cleared so there is only ever one default.
+func (r *AddressRepo) Create(a *model.Address) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if a.IsDefault == 1 {
+		if _, err := tx.Exec(`UPDATE addresses SET is_default=0 WHERE user_id=?`, a.UserID); err != nil {
+			return err
+		}
+	}
+	res, err := tx.Exec(
+		`INSERT INTO addresses (user_id, name, phone, detail, is_default) VALUES (?,?,?,?,?)`,
+		a.UserID, a.Name, a.Phone, a.Detail, a.IsDefault)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	a.ID, _ = res.LastInsertId()
+	return nil
+}
+
+func (r *AddressRepo) Update(a *model.Address) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if a.IsDefault == 1 {
+		if _, err := tx.Exec(`UPDATE addresses SET is_default=0 WHERE user_id=?`, a.UserID); err != nil {
+			return err
+		}
+	}
+	res, err := tx.Exec(
+		`UPDATE addresses SET name=?, phone=?, detail=?, is_default=? WHERE id=? AND user_id=?`,
+		a.Name, a.Phone, a.Detail, a.IsDefault, a.ID, a.UserID)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *AddressRepo) Delete(id, userID int64) error {
+	_, err := r.db.Exec(`DELETE FROM addresses WHERE id=? AND user_id=?`, id, userID)
+	return err
+}
+
+// ===================== Favorite (wishlist) =====================
+
+type FavoriteRepo struct{ db *sql.DB }
+
+func NewFavoriteRepo(db *sql.DB) *FavoriteRepo { return &FavoriteRepo{db: db} }
+
+// Toggle adds or removes a favorite; returns true if now favorited.
+func (r *FavoriteRepo) Toggle(userID, productID int64) (bool, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	// Try to delete first.
+	res, err := tx.Exec(`DELETE FROM favorites WHERE user_id=? AND product_id=?`, userID, productID)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		// was favorited, now removed.
+		return false, tx.Commit()
+	}
+	if _, err := tx.Exec(`INSERT INTO favorites (user_id, product_id) VALUES (?,?)`, userID, productID); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// IsFavorited reports whether a user has favorited a product.
+func (r *FavoriteRepo) IsFavorited(userID, productID int64) bool {
+	var one int
+	_ = r.db.QueryRow(`SELECT 1 FROM favorites WHERE user_id=? AND product_id=?`, userID, productID).Scan(&one)
+	return one == 1
+}
+
+// ListByUser returns a user's favorited products (newest first).
+func (r *FavoriteRepo) ListByUser(userID int64) ([]model.Favorite, error) {
+	rows, err := r.db.Query(
+		`SELECT f.id, f.product_id, f.created_at, p.name, p.image, p.price
+		 FROM favorites f JOIN products p ON p.id = f.product_id
+		 WHERE f.user_id=? ORDER BY f.id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.Favorite{}
+	for rows.Next() {
+		var f model.Favorite
+		if err := rows.Scan(&f.ID, &f.ProductID, &f.CreatedAt, &f.ProductName, &f.ProductImg, &f.Price); err == nil {
+			f.UserID = userID
+			out = append(out, f)
+		}
+	}
+	return out, nil
+}
+
+// CountByUser reports how many products a user has favorited.
+func (r *FavoriteRepo) CountByUser(userID int64) (int, error) {
+	var n int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM favorites WHERE user_id=?`, userID).Scan(&n)
+	return n, err
 }
 
 // ===================== helpers =====================

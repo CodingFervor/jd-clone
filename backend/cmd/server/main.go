@@ -52,6 +52,8 @@ func main() {
 		repository.NewRefundRepo(db.DB),
 		repository.NewCouponRepo(db.DB),
 	)
+	// Attach the favorite (wishlist) repo.
+	h.SetUserExtra(repository.NewFavoriteRepo(db.DB))
 
 	// Ensure the images directory exists for the static file server.
 	_ = os.MkdirAll("data/images", 0o755)

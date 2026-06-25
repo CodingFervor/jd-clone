@@ -68,9 +68,23 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			auth.POST("/reviews", h.CreateReview)
 
 			auth.GET("/addresses", h.ListAddresses)
+			auth.POST("/addresses", h.CreateAddress)
+			auth.PUT("/addresses/:id", h.UpdateAddress)
+			auth.DELETE("/addresses/:id", h.DeleteAddress)
 
 			// Image upload (used by admin product form + review photos)
 			auth.POST("/upload", h.UploadImage)
+
+			// Favorites / wishlist
+			auth.GET("/favorites", h.ListFavorites)
+			auth.POST("/favorites/:id", h.ToggleFavorite)
+			auth.GET("/favorites/:id/check", h.CheckFavorite)
+
+			// Edit profile
+			auth.PUT("/auth/profile", h.UpdateProfile)
+
+			// Confirm receipt (order lifecycle)
+			auth.POST("/orders/:id/confirm", h.ConfirmOrder)
 
 			// After-sale refunds
 			auth.POST("/refunds", h.CreateRefund)

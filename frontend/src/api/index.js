@@ -92,4 +92,21 @@ export const trackOrder = (orderId) => http.get(`/orders/${orderId}/track`).then
 export const advanceShipment = (orderId) => http.post(`/orders/${orderId}/ship/advance`).then((r) => r.data.shipment)
 export const trackByNo = (no) => http.get(`/shipments/track`, { params: { no } }).then((r) => r.data.shipment)
 
+// ---- Favorites (wishlist) ----
+export const listFavorites = () => http.get('/favorites').then((r) => r.data.data)
+export const toggleFavorite = (productId) => http.post(`/favorites/${productId}`).then((r) => r.data)
+export const checkFavorite = (productId) => http.get(`/favorites/${productId}/check`).then((r) => r.data.favorited)
+
+// ---- Addresses ----
+export const getAddresses = () => http.get('/addresses').then((r) => r.data.data)
+export const createAddress = (payload) => http.post('/addresses', payload).then((r) => r.data.data)
+export const updateAddress = (id, payload) => http.put(`/addresses/${id}`, payload).then((r) => r.data)
+export const deleteAddress = (id) => http.delete(`/addresses/${id}`).then((r) => r.data)
+
+// ---- Order lifecycle ----
+export const confirmOrder = (orderId) => http.post(`/orders/${orderId}/confirm`).then((r) => r.data)
+
+// ---- Profile ----
+export const updateProfile = (payload) => http.put('/auth/profile', payload).then((r) => r.data.data)
+
 export { errMsg }
