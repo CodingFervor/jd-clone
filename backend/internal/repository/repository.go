@@ -563,6 +563,116 @@ func (r *FavoriteRepo) CountByUser(userID int64) (int, error) {
 	return n, err
 }
 
+// ===================== Browse history =====================
+
+type HistoryRepo struct{ db *sql.DB }
+
+func NewHistoryRepo(db *sql.DB) *HistoryRepo { return &HistoryRepo{db: db} }
+
+// RecordView bumps a product to the top of the user's history (insert-or-
+// update the viewed_at via upsert). Anonymous users (uid <= 0) are skipped.
+func (r *HistoryRepo) RecordView(userID, productID int64) error {
+	if userID <= 0 {
+		return nil
+	}
+	_, err := r.db.Exec(
+		`INSERT INTO browse_history (user_id, product_id, viewed_at) VALUES (?,?,CURRENT_TIMESTAMP)
+		 ON CONFLICT(user_id, product_id) DO UPDATE SET viewed_at=CURRENT_TIMESTAMP`,
+		userID, productID)
+	return err
+}
+
+// ListByUser returns the user's recently viewed products (newest first).
+func (r *HistoryRepo) ListByUser(userID int64, limit int) ([]model.History, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	rows, err := r.db.Query(
+		`SELECT h.id, h.product_id, h.viewed_at, p.name, p.image, p.price
+		 FROM browse_history h JOIN products p ON p.id = h.product_id
+		 WHERE h.user_id=? ORDER BY h.viewed_at DESC LIMIT ?`, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.History{}
+	for rows.Next() {
+		var h model.History
+		if err := rows.Scan(&h.ID, &h.ProductID, &h.ViewedAt, &h.ProductName, &h.ProductImg, &h.Price); err == nil {
+			h.UserID = userID
+			out = append(out, h)
+		}
+	}
+	return out, nil
+}
+
+func (r *HistoryRepo) Clear(userID int64) error {
+	_, err := r.db.Exec(`DELETE FROM browse_history WHERE user_id=?`, userID)
+	return err
+}
+
+// ===================== Daily check-in =====================
+
+type CheckInRepo struct{ db *sql.DB }
+
+func NewCheckInRepo(db *sql.DB) *CheckInRepo { return &CheckInRepo{db: db} }
+
+// CheckIn records today's check-in for a user. It computes a streak (consecutive
+// days) and awards points. Returns the resulting record and whether it was a new
+// check-in (false = already checked in today).
+func (r *CheckInRepo) CheckIn(userID int64) (*model.CheckIn, bool, error) {
+	today := time.Now().Format("2006-01-02")
+	// Already checked in today?
+	var existing model.CheckIn
+	err := r.db.QueryRow(
+		`SELECT id, user_id, check_date, streak, points FROM check_ins WHERE user_id=? AND check_date=?`, userID, today,
+	).Scan(&existing.ID, &existing.UserID, &existing.CheckDate, &existing.Streak, &existing.Points)
+	if err == nil {
+		return &existing, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, false, err
+	}
+	// Determine streak from yesterday's record.
+	streak := 1
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	var prevStreak int
+	_ = r.db.QueryRow(`SELECT streak FROM check_ins WHERE user_id=? AND check_date=?`, userID, yesterday).Scan(&prevStreak)
+	if prevStreak > 0 {
+		streak = prevStreak + 1
+	}
+	// Points scale gently with streak: day N awards N points (capped at 30).
+	points := streak
+	if points > 30 {
+		points = 30
+	}
+	ci := &model.CheckIn{UserID: userID, CheckDate: today, Streak: streak, Points: points}
+	res, err := r.db.Exec(
+		`INSERT INTO check_ins (user_id, check_date, streak, points) VALUES (?,?,?,?)`,
+		userID, today, streak, points)
+	if err != nil {
+		return nil, false, err
+	}
+	ci.ID, _ = res.LastInsertId()
+	return ci, true, nil
+}
+
+// Status returns the latest check-in for a user (or nil if none) + total points.
+func (r *CheckInRepo) Status(userID int64) (last *model.CheckIn, totalPoints int, err error) {
+	last = &model.CheckIn{}
+	err = r.db.QueryRow(
+		`SELECT id, user_id, check_date, streak, points FROM check_ins WHERE user_id=? ORDER BY check_date DESC LIMIT 1`, userID,
+	).Scan(&last.ID, &last.UserID, &last.CheckDate, &last.Streak, &last.Points)
+	if err == sql.ErrNoRows {
+		return nil, 0, nil
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	_ = r.db.QueryRow(`SELECT COALESCE(SUM(points), 0) FROM check_ins WHERE user_id=?`, userID).Scan(&totalPoints)
+	return last, totalPoints, nil
+}
+
 // ===================== helpers =====================
 
 func defaultStr(s, d string) string {

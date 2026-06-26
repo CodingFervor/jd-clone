@@ -78,6 +78,8 @@ function logout() {
       <van-cell title="购物车" :value="cartCount + '件'" is-link @click="router.push('/cart')" icon="cart-o" />
       <van-cell title="我的订单" is-link @click="router.push('/orders')" icon="orders-o" />
       <van-cell title="我的收藏" is-link @click="router.push('/favorites')" icon="star-o" />
+      <van-cell title="浏览历史" is-link @click="router.push('/history')" icon="clock-o" />
+      <van-cell title="每日签到" is-link @click="router.push('/checkin')" icon="calendar-o" />
       <van-cell title="售后服务" is-link @click="router.push('/refunds')" icon="after-sale" />
       <van-cell title="优惠券" is-link @click="router.push('/coupons')" icon="coupon-o" />
       <van-cell title="收货地址" is-link icon="location-o" @click="router.push('/addresses')" />

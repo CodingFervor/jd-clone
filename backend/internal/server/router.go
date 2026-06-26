@@ -80,6 +80,14 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			auth.POST("/favorites/:id", h.ToggleFavorite)
 			auth.GET("/favorites/:id/check", h.CheckFavorite)
 
+			// Browse history
+			auth.GET("/history", h.ListHistory)
+			auth.DELETE("/history", h.ClearHistory)
+
+			// Daily check-in
+			auth.POST("/checkin", h.DoCheckIn)
+			auth.GET("/checkin/status", h.CheckInStatus)
+
 			// Edit profile
 			auth.PUT("/auth/profile", h.UpdateProfile)
 

@@ -208,6 +208,26 @@ func createTables() error {
 			UNIQUE(user_id, product_id)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)`,
+		// Browse history: products a logged-in user has viewed (recent first).
+		`CREATE TABLE IF NOT EXISTS browse_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			product_id INTEGER NOT NULL,
+			viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, product_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_history_user ON browse_history(user_id)`,
+		// Daily check-ins: one row per user per day (积分/奖励 demo).
+		`CREATE TABLE IF NOT EXISTS check_ins (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			check_date TEXT NOT NULL,
+			streak INTEGER NOT NULL DEFAULT 1,
+			points INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, check_date)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_checkins_user ON check_ins(user_id)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.

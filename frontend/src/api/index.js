@@ -109,4 +109,12 @@ export const confirmOrder = (orderId) => http.post(`/orders/${orderId}/confirm`)
 // ---- Profile ----
 export const updateProfile = (payload) => http.put('/auth/profile', payload).then((r) => r.data.data)
 
+// ---- Browse history ----
+export const getHistory = (limit) => http.get('/history', { params: { limit } }).then((r) => r.data.data)
+export const clearHistory = () => http.delete('/history').then((r) => r.data)
+
+// ---- Daily check-in ----
+export const doCheckIn = () => http.post('/checkin').then((r) => r.data)
+export const getCheckInStatus = () => http.get('/checkin/status').then((r) => r.data)
+
 export { errMsg }

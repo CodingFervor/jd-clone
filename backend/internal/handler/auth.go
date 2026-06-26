@@ -30,6 +30,8 @@ type Handler struct {
 	Refund   *repository.RefundRepo
 	Coupon   *repository.CouponRepo
 	Favorite *repository.FavoriteRepo
+	History  *repository.HistoryRepo
+	CheckIn  *repository.CheckInRepo
 	jwtKey   []byte
 }
 
@@ -41,6 +43,12 @@ func New(jwtSecret string, u *repository.UserRepo, c *repository.CategoryRepo, p
 // SetUserExtra attaches the favorite repo (wishlist support).
 func (h *Handler) SetUserExtra(fav *repository.FavoriteRepo) {
 	h.Favorite = fav
+}
+
+// SetHistory attaches the browse-history + check-in repos.
+func (h *Handler) SetHistory(hist *repository.HistoryRepo, ci *repository.CheckInRepo) {
+	h.History = hist
+	h.CheckIn = ci
 }
 
 // ---- JWT (HS256, hand-rolled, no external dep) ----

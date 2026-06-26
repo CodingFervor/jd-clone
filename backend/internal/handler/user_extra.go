@@ -179,3 +179,59 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": u})
 }
+
+// ===================== Browse history =====================
+
+func (h *Handler) ListHistory(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "30"))
+	list, err := h.History.ListByUser(uid, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list})
+}
+
+func (h *Handler) ClearHistory(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.History.Clear(uid); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "清除失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "已清除"})
+}
+
+// ===================== Daily check-in =====================
+
+func (h *Handler) DoCheckIn(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	ci, isNew, err := h.CheckIn.CheckIn(uid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "签到失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": ci, "is_new": isNew})
+}
+
+func (h *Handler) CheckInStatus(c *gin.Context) {
+	uid, ok := h.currentUserID(c, true)
+	if !ok {
+		return
+	}
+	last, total, err := h.CheckIn.Status(uid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"last": last, "total_points": total})
+}
