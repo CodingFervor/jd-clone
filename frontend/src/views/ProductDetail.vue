@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -105,6 +105,24 @@ async function submitReview() {
     showToast('请先登录')
   }
 }
+const replyingTo = ref(null)
+const replyText = ref('')
+function toggleReply(r) {
+  replyingTo.value = replyingTo.value === r.id ? null : r.id
+  replyText.value = ''
+}
+async function submitReply(r) {
+  if (!replyText.value.trim()) { showToast('请输入回复内容'); return }
+  try {
+    const rep = await replyReview(r.id, replyText.value)
+    r.reply = rep
+    replyingTo.value = null
+    replyText.value = ''
+    showSuccessToast('回复成功')
+  } catch (e) {
+    showToast('请先登录')
+  }
+}
 function fmt(n) {
   return Number(n).toFixed(2)
 }
@@ -154,8 +172,16 @@ function fmt(n) {
         <div class="rev-user">
           <span>{{ r.username }}</span>
           <van-rate v-model="r.rating" readonly size="12" />
+          <span class="rev-reply-btn" @click="toggleReply(r)">回复</span>
         </div>
         <div class="rev-content">{{ r.content }}</div>
+        <div v-if="r.reply" class="rev-reply">
+          <span class="rev-reply-name">{{ r.reply.username }}：</span>{{ r.reply.content }}
+        </div>
+        <div v-if="replyingTo === r.id" class="rev-reply-box">
+          <van-field v-model="replyText" placeholder="写下你的回复..." />
+          <van-button size="small" type="danger" @click="submitReply(r)">发送</van-button>
+        </div>
       </div>
       <van-empty v-if="!reviews.length" description="暂无评价" />
     </div>
@@ -213,6 +239,11 @@ function fmt(n) {
 .rev-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }
+.rev-reply-btn { margin-left: auto; color: #e1251b; font-size: 12px; }
+.rev-reply { background: #f7f7f7; border-radius: 6px; padding: 6px 10px; margin-top: 6px; font-size: 12px; color: #666; line-height: 18px; }
+.rev-reply-name { color: #e1251b; }
+.rev-reply-box { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.rev-reply-box .van-field { flex: 1; border: 1px solid #eee; border-radius: 6px; }
 .rev-form { padding: 20px; }
 .rev-form h3 { text-align: center; margin-bottom: 16px; }
 .rev-form .van-field { margin: 12px 0; border: 1px solid #eee; }

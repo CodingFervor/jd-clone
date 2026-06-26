@@ -88,6 +88,14 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			auth.POST("/checkin", h.DoCheckIn)
 			auth.GET("/checkin/status", h.CheckInStatus)
 
+			// Points mall (积分商城)
+			auth.GET("/points/shop", h.ListPointShop)
+			auth.POST("/points/shop/:id/redeem", h.RedeemPoints)
+			auth.GET("/points/redemptions", h.ListRedemptions)
+
+			// Review replies
+			auth.POST("/reviews/reply", h.ReplyReview)
+
 			// Edit profile
 			auth.PUT("/auth/profile", h.UpdateProfile)
 

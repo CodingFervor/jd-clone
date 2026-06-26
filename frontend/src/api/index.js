@@ -117,4 +117,12 @@ export const clearHistory = () => http.delete('/history').then((r) => r.data)
 export const doCheckIn = () => http.post('/checkin').then((r) => r.data)
 export const getCheckInStatus = () => http.get('/checkin/status').then((r) => r.data)
 
+// ---- Points mall ----
+export const getPointShop = () => http.get('/points/shop').then((r) => r.data)
+export const redeemPoints = (id) => http.post(`/points/shop/${id}/redeem`).then((r) => r.data)
+export const getRedemptions = () => http.get('/points/redemptions').then((r) => r.data.data)
+
+// ---- Review replies ----
+export const replyReview = (reviewId, content) => http.post('/reviews/reply', { review_id: reviewId, content }).then((r) => r.data.data)
+
 export { errMsg }

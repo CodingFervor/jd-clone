@@ -235,3 +235,81 @@ func (h *Handler) CheckInStatus(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"last": last, "total_points": total})
 }
+
+// ===================== Points mall (积分商城) =====================
+
+func (h *Handler) ListPointShop(c *gin.Context) {
+	uid, _ := h.currentUserID(c, true)
+	list, err := h.Shop.List()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	points := 0
+	if uid > 0 {
+		points = h.Shop.AvailablePoints(uid)
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list, "points": points})
+}
+
+func (h *Handler) RedeemPoints(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		return
+	}
+	rd, err := h.Shop.Redeem(uid, pid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": rd, "points": h.Shop.AvailablePoints(uid)})
+}
+
+func (h *Handler) ListRedemptions(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	list, err := h.Shop.ListRedemptions(uid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list})
+}
+
+// ===================== Review replies =====================
+
+func (h *Handler) ReplyReview(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		ReviewID int64  `json:"review_id" binding:"required"`
+		Content  string `json:"content" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数不合法"})
+		return
+	}
+	u, _ := h.User.Get(uid)
+	name := ""
+	if u != nil {
+		name = u.Nickname
+		if name == "" {
+			name = u.Username
+		}
+	}
+	rep := &model.ReviewReply{ReviewID: req.ReviewID, UserID: uid, Username: name, Content: req.Content}
+	if err := h.Review.AddReply(rep); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "回复失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": rep})
+}

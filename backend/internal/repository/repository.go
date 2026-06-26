@@ -385,6 +385,7 @@ func (r *ReviewRepo) ListByProduct(productID int64) ([]model.Review, error) {
 	for rows.Next() {
 		var rv model.Review
 		if err := rows.Scan(&rv.ID, &rv.ProductID, &rv.UserID, &rv.Username, &rv.Rating, &rv.Content, &rv.CreatedAt); err == nil {
+			rv.Reply, _ = r.getReply(rv.ID)
 			out = append(out, rv)
 		}
 	}
@@ -402,6 +403,30 @@ func (r *ReviewRepo) Create(rv *model.Review) error {
 		return err
 	}
 	rv.ID, _ = res.LastInsertId()
+	return nil
+}
+
+// getReply loads the (single) reply for a review, if any.
+func (r *ReviewRepo) getReply(reviewID int64) (*model.ReviewReply, error) {
+	rep := &model.ReviewReply{}
+	err := r.db.QueryRow(
+		`SELECT id, review_id, user_id, username, content, created_at FROM review_replies WHERE review_id=? LIMIT 1`, reviewID,
+	).Scan(&rep.ID, &rep.ReviewID, &rep.UserID, &rep.Username, &rep.Content, &rep.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return rep, err
+}
+
+// AddReply posts a reply to a review (merchant/owner response).
+func (r *ReviewRepo) AddReply(rep *model.ReviewReply) error {
+	res, err := r.db.Exec(
+		`INSERT INTO review_replies (review_id, user_id, username, content) VALUES (?,?,?,?)`,
+		rep.ReviewID, rep.UserID, rep.Username, rep.Content)
+	if err != nil {
+		return err
+	}
+	rep.ID, _ = res.LastInsertId()
 	return nil
 }
 
@@ -670,7 +695,143 @@ func (r *CheckInRepo) Status(userID int64) (last *model.CheckIn, totalPoints int
 		return nil, 0, err
 	}
 	_ = r.db.QueryRow(`SELECT COALESCE(SUM(points), 0) FROM check_ins WHERE user_id=?`, userID).Scan(&totalPoints)
+	// Subtract already-redeemed points so totalPoints reflects the *available* balance.
+	var spent int
+	_ = r.db.QueryRow(`SELECT COALESCE(SUM(points_cost), 0) FROM redemptions WHERE user_id=?`, userID).Scan(&spent)
+	totalPoints -= spent
+	if totalPoints < 0 {
+		totalPoints = 0
+	}
 	return last, totalPoints, nil
+}
+
+// ===================== Points mall (积分商城) =====================
+
+type PointShopRepo struct{ db *sql.DB }
+
+func NewPointShopRepo(db *sql.DB) *PointShopRepo { return &PointShopRepo{db: db} }
+
+// List returns all redeemable point products (in stock, by sort order).
+func (r *PointShopRepo) List() ([]model.PointProduct, error) {
+	rows, err := r.db.Query(
+		`SELECT id, name, image, points, stock, sort_order FROM point_products WHERE stock > 0 ORDER BY sort_order, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.PointProduct{}
+	for rows.Next() {
+		var p model.PointProduct
+		if err := rows.Scan(&p.ID, &p.Name, &p.Image, &p.Points, &p.Stock, &p.SortOrder); err == nil {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+// Get loads a single point product.
+func (r *PointShopRepo) Get(id int64) (*model.PointProduct, error) {
+	p := &model.PointProduct{}
+	err := r.db.QueryRow(
+		`SELECT id, name, image, points, stock, sort_order FROM point_products WHERE id=?`, id,
+	).Scan(&p.ID, &p.Name, &p.Image, &p.Points, &p.Stock, &p.SortOrder)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return p, err
+}
+
+// AvailablePoints reports a user's redeemable balance (earned minus spent).
+func (r *PointShopRepo) AvailablePoints(userID int64) int {
+	var earned, spent int
+	_ = r.db.QueryRow(`SELECT COALESCE(SUM(points), 0) FROM check_ins WHERE user_id=?`, userID).Scan(&earned)
+	_ = r.db.QueryRow(`SELECT COALESCE(SUM(points_cost), 0) FROM redemptions WHERE user_id=?`, userID).Scan(&spent)
+	bal := earned - spent
+	if bal < 0 {
+		bal = 0
+	}
+	return bal
+}
+
+// Redeem exchanges points for a product. It is transactional and enforces both
+// the point balance and the stock count.
+func (r *PointShopRepo) Redeem(userID, productID int64) (*model.Redemption, error) {
+	p, err := r.Get(productID)
+	if err != nil || p == nil {
+		return nil, fmt.Errorf("商品不存在")
+	}
+	if p.Stock <= 0 {
+		return nil, fmt.Errorf("库存不足")
+	}
+	if r.AvailablePoints(userID) < p.Points {
+		return nil, fmt.Errorf("积分不足")
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(
+		`INSERT INTO redemptions (user_id, product_id, points_cost) VALUES (?,?,?)`,
+		userID, productID, p.Points)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(`UPDATE point_products SET stock = stock - 1 WHERE id=?`, productID); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	rd := &model.Redemption{UserID: userID, ProductID: productID, PointsCost: p.Points, Status: "done", ProductName: p.Name}
+	rd.ID, _ = res.LastInsertId()
+	return rd, nil
+}
+
+// ListRedemptions returns a user's redemption history.
+func (r *PointShopRepo) ListRedemptions(userID int64) ([]model.Redemption, error) {
+	rows, err := r.db.Query(
+		`SELECT r.id, r.user_id, r.product_id, r.points_cost, r.status, p.name, r.created_at
+		 FROM redemptions r JOIN point_products p ON p.id = r.product_id
+		 WHERE r.user_id=? ORDER BY r.id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.Redemption{}
+	for rows.Next() {
+		var rd model.Redemption
+		if err := rows.Scan(&rd.ID, &rd.UserID, &rd.ProductID, &rd.PointsCost, &rd.Status, &rd.ProductName, &rd.CreatedAt); err == nil {
+			out = append(out, rd)
+		}
+	}
+	return out, nil
+}
+
+// SeedPointShop populates the points mall with demo rewards if empty.
+func (r *PointShopRepo) SeedPointShop() {
+	var n int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM point_products`).Scan(&n)
+	if n > 0 {
+		return
+	}
+	items := []struct {
+		name   string
+		image  string
+		points int
+		stock  int
+	}{
+		{"京东10元无门槛券", "https://api.dicebear.com/7.x/shapes/svg?seed=jd1", 100, 50},
+		{"京东50元满减券", "https://api.dicebear.com/7.x/shapes/svg?seed=jd2", 500, 20},
+		{"PLUS会员月卡", "https://api.dicebear.com/7.x/shapes/svg?seed=plus", 800, 10},
+		{"蓝牙耳机", "https://api.dicebear.com/7.x/shapes/svg?seed=ear", 2000, 5},
+		{"100M流量包", "https://api.dicebear.com/7.x/shapes/svg?seed=flow", 300, 100},
+	}
+	for i, it := range items {
+		_, _ = r.db.Exec(
+			`INSERT INTO point_products (name, image, points, stock, sort_order) VALUES (?,?,?,?,?)`,
+			it.name, it.image, it.points, it.stock, i)
+	}
 }
 
 // ===================== helpers =====================

@@ -228,6 +228,35 @@ func createTables() error {
 			UNIQUE(user_id, check_date)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_checkins_user ON check_ins(user_id)`,
+		// Point products: redeemable rewards in the points mall (积分商城).
+		`CREATE TABLE IF NOT EXISTS point_products (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			image TEXT NOT NULL DEFAULT '',
+			points INTEGER NOT NULL DEFAULT 0,
+			stock INTEGER NOT NULL DEFAULT 0,
+			sort_order INTEGER NOT NULL DEFAULT 0
+		)`,
+		// Redemptions: a user's exchange record (扣减积分).
+		`CREATE TABLE IF NOT EXISTS redemptions (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			product_id INTEGER NOT NULL,
+			points_cost INTEGER NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'done',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_redemptions_user ON redemptions(user_id)`,
+		// Review replies: a merchant/owner response to a buyer review.
+		`CREATE TABLE IF NOT EXISTS review_replies (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			review_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			username TEXT NOT NULL DEFAULT '',
+			content TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_replies_review ON review_replies(review_id)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.

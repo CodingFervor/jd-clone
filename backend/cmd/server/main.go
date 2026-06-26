@@ -54,8 +54,10 @@ func main() {
 	)
 	// Attach the favorite (wishlist) repo.
 	h.SetUserExtra(repository.NewFavoriteRepo(db.DB))
-	// Attach the browse-history + check-in repos.
-	h.SetHistory(repository.NewHistoryRepo(db.DB), repository.NewCheckInRepo(db.DB))
+	// Attach the browse-history + check-in + points-mall repos.
+	shopRepo := repository.NewPointShopRepo(db.DB)
+	shopRepo.SeedPointShop()
+	h.SetHistory(repository.NewHistoryRepo(db.DB), repository.NewCheckInRepo(db.DB), shopRepo)
 
 	// Ensure the images directory exists for the static file server.
 	_ = os.MkdirAll("data/images", 0o755)
