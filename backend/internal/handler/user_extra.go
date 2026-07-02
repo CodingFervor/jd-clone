@@ -313,3 +313,34 @@ func (h *Handler) ReplyReview(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": rep})
 }
+
+// ===================== Seckill deals (秒杀活动) =====================
+
+// ListSeckillDeals: GET /seckill (public)
+func (h *Handler) ListSeckillDeals(c *gin.Context) {
+	deals, err := h.Seckill.ListActive(10)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": deals})
+}
+
+// GrabSeckill: POST /seckill/:id/grab — atomic flash-sale purchase (requires auth).
+func (h *Handler) GrabSeckill(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		return
+	}
+	deal, err := h.Seckill.Grab(id, uid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": deal, "message": "抢购成功"})
+}

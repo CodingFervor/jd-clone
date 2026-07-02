@@ -76,6 +76,7 @@ type Review struct {
 	Username  string       `json:"username"`
 	Rating    int          `json:"rating"`
 	Content   string       `json:"content"`
+	Images    string       `json:"images"` // comma-separated photo URLs (评价晒图)
 	CreatedAt time.Time    `json:"created_at"`
 	Reply     *ReviewReply `json:"reply,omitempty"` // merchant/owner response, if any
 }
@@ -151,6 +152,22 @@ type Redemption struct {
 	Status      string    `json:"status"`
 	ProductName string    `json:"product_name"` // joined
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// SeckillDeal is a time-boxed flash sale with a separate stock pool.
+type SeckillDeal struct {
+	ID           int64     `json:"id"`
+	ProductID    int64     `json:"product_id"`
+	SeckillPrice float64   `json:"seckill_price"`
+	Stock        int       `json:"stock"`
+	Sold         int       `json:"sold"`
+	StartTime    time.Time `json:"start_time"`
+	EndTime      time.Time `json:"end_time"`
+	Status       string    `json:"status"`
+	// Joined product fields (populated for list responses).
+	ProductName   string  `json:"product_name"`
+	ProductImage  string  `json:"product_image"`
+	OriginalPrice float64 `json:"original_price"`
 }
 
 // SKU is a specific spec combination (color/size/version) of a product.
@@ -270,6 +287,7 @@ type CreateReviewRequest struct {
 	ProductID int64  `json:"product_id" binding:"required"`
 	Rating    int    `json:"rating"`
 	Content   string `json:"content"`
+	Images    string `json:"images"` // comma-separated photo URLs (评价晒图)
 }
 
 type AddressInput struct {

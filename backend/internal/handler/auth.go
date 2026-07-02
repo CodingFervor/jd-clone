@@ -33,6 +33,7 @@ type Handler struct {
 	History  *repository.HistoryRepo
 	CheckIn  *repository.CheckInRepo
 	Shop     *repository.PointShopRepo
+	Seckill  *repository.SeckillRepo
 	jwtKey   []byte
 }
 
@@ -51,6 +52,11 @@ func (h *Handler) SetHistory(hist *repository.HistoryRepo, ci *repository.CheckI
 	h.History = hist
 	h.CheckIn = ci
 	h.Shop = shop
+}
+
+// SetSeckill attaches the flash-sale repo.
+func (h *Handler) SetSeckill(s *repository.SeckillRepo) {
+	h.Seckill = s
 }
 
 // ---- JWT (HS256, hand-rolled, no external dep) ----

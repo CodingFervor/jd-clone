@@ -375,7 +375,7 @@ func NewReviewRepo(db *sql.DB) *ReviewRepo { return &ReviewRepo{db: db} }
 
 func (r *ReviewRepo) ListByProduct(productID int64) ([]model.Review, error) {
 	rows, err := r.db.Query(
-		`SELECT id, product_id, user_id, username, rating, content, created_at
+		`SELECT id, product_id, user_id, username, rating, content, images, created_at
 		 FROM reviews WHERE product_id=? ORDER BY id DESC`, productID)
 	if err != nil {
 		return nil, err
@@ -384,7 +384,7 @@ func (r *ReviewRepo) ListByProduct(productID int64) ([]model.Review, error) {
 	out := []model.Review{}
 	for rows.Next() {
 		var rv model.Review
-		if err := rows.Scan(&rv.ID, &rv.ProductID, &rv.UserID, &rv.Username, &rv.Rating, &rv.Content, &rv.CreatedAt); err == nil {
+		if err := rows.Scan(&rv.ID, &rv.ProductID, &rv.UserID, &rv.Username, &rv.Rating, &rv.Content, &rv.Images, &rv.CreatedAt); err == nil {
 			rv.Reply, _ = r.getReply(rv.ID)
 			out = append(out, rv)
 		}
@@ -397,8 +397,8 @@ func (r *ReviewRepo) Create(rv *model.Review) error {
 		rv.Rating = 5
 	}
 	res, err := r.db.Exec(
-		`INSERT INTO reviews (product_id, user_id, username, rating, content) VALUES (?,?,?,?,?)`,
-		rv.ProductID, rv.UserID, rv.Username, rv.Rating, rv.Content)
+		`INSERT INTO reviews (product_id, user_id, username, rating, content, images) VALUES (?,?,?,?,?,?)`,
+		rv.ProductID, rv.UserID, rv.Username, rv.Rating, rv.Content, rv.Images)
 	if err != nil {
 		return err
 	}
@@ -831,6 +831,116 @@ func (r *PointShopRepo) SeedPointShop() {
 		_, _ = r.db.Exec(
 			`INSERT INTO point_products (name, image, points, stock, sort_order) VALUES (?,?,?,?,?)`,
 			it.name, it.image, it.points, it.stock, i)
+	}
+}
+
+// ===================== Seckill deals (秒杀活动) =====================
+
+type SeckillRepo struct{ db *sql.DB }
+
+func NewSeckillRepo(db *sql.DB) *SeckillRepo { return &SeckillRepo{db: db} }
+
+// ListActive returns currently-active flash-sale deals, joined with product info.
+func (r *SeckillRepo) ListActive(limit int) ([]model.SeckillDeal, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.db.Query(
+		`SELECT s.id, s.product_id, s.seckill_price, s.stock, s.sold, s.start_time, s.end_time, s.status,
+		        p.name, p.image, p.original_price
+		 FROM seckill_deals s JOIN products p ON p.id = s.product_id
+		 WHERE s.status='active' AND s.end_time > CURRENT_TIMESTAMP AND s.stock > s.sold
+		 ORDER BY s.end_time ASC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.SeckillDeal{}
+	for rows.Next() {
+		var d model.SeckillDeal
+		if err := rows.Scan(&d.ID, &d.ProductID, &d.SeckillPrice, &d.Stock, &d.Sold, &d.StartTime, &d.EndTime, &d.Status,
+			&d.ProductName, &d.ProductImage, &d.OriginalPrice); err == nil {
+			out = append(out, d)
+		}
+	}
+	return out, nil
+}
+
+// Get returns a single seckill deal by id.
+func (r *SeckillRepo) Get(id int64) (*model.SeckillDeal, error) {
+	d := &model.SeckillDeal{}
+	err := r.db.QueryRow(
+		`SELECT s.id, s.product_id, s.seckill_price, s.stock, s.sold, s.start_time, s.end_time, s.status,
+		        p.name, p.image, p.original_price
+		 FROM seckill_deals s JOIN products p ON p.id = s.product_id WHERE s.id=?`, id,
+	).Scan(&d.ID, &d.ProductID, &d.SeckillPrice, &d.Stock, &d.Sold, &d.StartTime, &d.EndTime, &d.Status,
+		&d.ProductName, &d.ProductImage, &d.OriginalPrice)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return d, err
+}
+
+// Grab is the atomic purchase action for a flash sale: it enforces the stock
+// pool and bumps the sold counter transactionally. Returns the updated deal.
+func (r *SeckillRepo) Grab(id, userID int64) (*model.SeckillDeal, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	// Lock the row and check availability.
+	var stock, sold int
+	var endTime string
+	err = tx.QueryRow(`SELECT stock, sold, end_time FROM seckill_deals WHERE id=? AND status='active'`, id).
+		Scan(&stock, &sold, &endTime)
+	if err != nil {
+		return nil, fmt.Errorf("活动不存在")
+	}
+	if stock <= sold {
+		return nil, fmt.Errorf("已抢光")
+	}
+	if _, err := tx.Exec(`UPDATE seckill_deals SET sold = sold + 1 WHERE id=?`, id); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return r.Get(id)
+}
+
+// SeedSeckill populates time-boxed demo flash sales if none exist yet.
+func (r *SeckillRepo) SeedSeckill() {
+	var n int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM seckill_deals`).Scan(&n)
+	if n > 0 {
+		return
+	}
+	// Pick the first few seeded products as flash-sale items.
+	rows, err := r.db.Query(`SELECT id, price FROM products ORDER BY id LIMIT 6`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	type pp struct {
+		id    int64
+		price float64
+	}
+	items := []pp{}
+	for rows.Next() {
+		var p pp
+		if rows.Scan(&p.id, &p.price) == nil {
+			items = append(items, p)
+		}
+	}
+	now := time.Now()
+	for i, p := range items {
+		// Each deal runs for ~2 hours from now (staggered starts).
+		start := now.Add(time.Duration(i) * time.Minute)
+		end := start.Add(2 * time.Hour)
+		_, _ = r.db.Exec(
+			`INSERT INTO seckill_deals (product_id, seckill_price, stock, sold, start_time, end_time, status) VALUES (?,?,?,?,?,?,?)`,
+			p.id, p.price*0.5, 50, 0, start, end, "active")
 	}
 }
 

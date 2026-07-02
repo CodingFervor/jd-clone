@@ -251,7 +251,7 @@ func (h *Handler) CreateReview(c *gin.Context) {
 	if u != nil {
 		uname = u.Nickname
 	}
-	rv := &model.Review{ProductID: req.ProductID, UserID: uid, Username: uname, Rating: req.Rating, Content: req.Content}
+	rv := &model.Review{ProductID: req.ProductID, UserID: uid, Username: uname, Rating: req.Rating, Content: req.Content, Images: req.Images}
 	if err := h.Review.Create(rv); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "评价失败"})
 		return

@@ -95,7 +95,7 @@ async function submitReview() {
     return
   }
   try {
-    const rv = await createReview({ product_id: product.value.id, rating: reviewRating.value, content: reviewContent.value })
+    const rv = await createReview({ product_id: product.value.id, rating: reviewRating.value, content: reviewContent.value, images: reviewImages.value.join(',') })
     reviews.value.unshift(rv)
     showReview.value = false
     reviewContent.value = ''
@@ -175,6 +175,9 @@ function fmt(n) {
           <span class="rev-reply-btn" @click="toggleReply(r)">回复</span>
         </div>
         <div class="rev-content">{{ r.content }}</div>
+        <div v-if="r.images" class="rev-photos">
+          <van-image v-for="(img, i) in r.images.split(',')" :key="i" width="72" height="72" radius="6" :src="img" fit="cover" />
+        </div>
         <div v-if="r.reply" class="rev-reply">
           <span class="rev-reply-name">{{ r.reply.username }}：</span>{{ r.reply.content }}
         </div>
@@ -239,6 +242,7 @@ function fmt(n) {
 .rev-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }
+.rev-photos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .rev-reply-btn { margin-left: auto; color: #e1251b; font-size: 12px; }
 .rev-reply { background: #f7f7f7; border-radius: 6px; padding: 6px 10px; margin-top: 6px; font-size: 12px; color: #666; line-height: 18px; }
 .rev-reply-name { color: #e1251b; }

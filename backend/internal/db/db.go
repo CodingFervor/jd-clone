@@ -106,6 +106,7 @@ func createTables() error {
 			username TEXT NOT NULL DEFAULT '',
 			rating INTEGER NOT NULL DEFAULT 5,
 			content TEXT NOT NULL DEFAULT '',
+			images TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id)`,
@@ -257,6 +258,18 @@ func createTables() error {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_replies_review ON review_replies(review_id)`,
+		// Seckill deals: time-boxed flash sales with a separate stock pool.
+		`CREATE TABLE IF NOT EXISTS seckill_deals (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			product_id INTEGER NOT NULL,
+			seckill_price REAL NOT NULL DEFAULT 0,
+			stock INTEGER NOT NULL DEFAULT 0,
+			sold INTEGER NOT NULL DEFAULT 0,
+			start_time DATETIME NOT NULL,
+			end_time DATETIME NOT NULL,
+			status TEXT NOT NULL DEFAULT 'active'
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_seckill_active ON seckill_deals(status)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.
@@ -280,6 +293,14 @@ func createTables() error {
 			return fmt.Errorf("exec: %w [stmt=%s]", err, truncate(s, 60))
 		}
 	}
+	return migrate()
+}
+
+// migrate applies additive post-create schema changes for databases created
+// before a feature shipped. Each step is best-effort and idempotent.
+func migrate() error {
+	// Add the images column to reviews (added after launch) — multi-photo 评价晒图.
+	_, _ = DB.Exec(`ALTER TABLE reviews ADD COLUMN images TEXT NOT NULL DEFAULT ''`)
 	return nil
 }
 

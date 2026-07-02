@@ -69,7 +69,7 @@ function fmt(n) {
 
     <!-- Seckill floor -->
     <div class="section">
-      <div class="section-head">
+      <div class="section-head" @click="router.push('/seckill')" style="cursor:pointer">
         <span class="jd-red"><van-icon name="clock-o" /> 京东秒杀</span>
         <span class="more">更多 ›</span>
       </div>

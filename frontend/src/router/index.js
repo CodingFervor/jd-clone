@@ -22,6 +22,7 @@ const routes = [
   { path: '/history', name: 'history', component: () => import('../views/History.vue'), meta: { auth: true } },
   { path: '/checkin', name: 'checkin', component: () => import('../views/CheckIn.vue'), meta: { auth: true } },
   { path: '/points-shop', name: 'pointShop', component: () => import('../views/PointShop.vue'), meta: { auth: true } },
+  { path: '/seckill', name: 'seckill', component: () => import('../views/Seckill.vue') },
   { path: '/admin', name: 'admin', component: () => import('../views/Admin.vue') },
 ]
 

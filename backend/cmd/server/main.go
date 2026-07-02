@@ -58,6 +58,10 @@ func main() {
 	shopRepo := repository.NewPointShopRepo(db.DB)
 	shopRepo.SeedPointShop()
 	h.SetHistory(repository.NewHistoryRepo(db.DB), repository.NewCheckInRepo(db.DB), shopRepo)
+	// Attach + seed the flash-sale (秒杀) repo.
+	seckillRepo := repository.NewSeckillRepo(db.DB)
+	seckillRepo.SeedSeckill()
+	h.SetSeckill(seckillRepo)
 
 	// Ensure the images directory exists for the static file server.
 	_ = os.MkdirAll("data/images", 0o755)
