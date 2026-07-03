@@ -10,6 +10,7 @@ const product = ref(null)
 const reviews = ref([])
 const skus = ref([])
 const selectedSKU = ref(null)
+const recommendedSKU = ref(null)
 const loading = ref(true)
 const showReview = ref(false)
 const reviewRating = ref(5)
@@ -42,6 +43,11 @@ onMounted(async () => {
     product.value = res.data
     reviews.value = res.reviews || []
     skus.value = res.skus || []
+    // Auto-select the recommended (best-value) SKU.
+    if (res.recommended_sku) {
+      selectedSKU.value = res.recommended_sku
+      recommendedSKU.value = res.recommended_sku
+    }
     if (localStorage.getItem('jd_token')) {
       favorited.value = await checkFavorite(route.params.id)
     }
@@ -153,7 +159,10 @@ function fmt(n) {
     </div>
     <!-- SKU spec selector -->
     <div v-if="skus.length" class="sku-block">
-      <div class="sku-title">已选：<b>{{ selectedSKU ? selectedSKU.spec_text : '请选择规格' }}</b></div>
+      <div class="sku-title">
+        已选：<b>{{ selectedSKU ? selectedSKU.spec_text : '请选择规格' }}</b>
+        <van-tag v-if="recommendedSKU && selectedSKU && selectedSKU.id === recommendedSKU.id" type="danger" round size="mini" style="margin-left:6px">AI推荐·性价比</van-tag>
+      </div>
       <div class="sku-tags">
         <span
           v-for="s in skus"

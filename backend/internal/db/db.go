@@ -317,6 +317,15 @@ func createTables() error {
 			UNIQUE(presale_id, user_id)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_presale_orders_user ON presale_orders(user_id)`,
+		// Refund tracks: a chronological log of each refund status change (售后进度).
+		`CREATE TABLE IF NOT EXISTS refund_tracks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			refund_id INTEGER NOT NULL,
+			status TEXT NOT NULL,
+			note TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_refund_tracks_refund ON refund_tracks(refund_id)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.

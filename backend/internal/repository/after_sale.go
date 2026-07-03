@@ -15,13 +15,25 @@ type RefundRepo struct{ db *sql.DB }
 func NewRefundRepo(db *sql.DB) *RefundRepo { return &RefundRepo{db: db} }
 
 func (r *RefundRepo) Create(rf *model.Refund) error {
-	res, err := r.db.Exec(
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(
 		`INSERT INTO refunds (order_id, user_id, reason, type, amount) VALUES (?,?,?,?,?)`,
 		rf.OrderID, rf.UserID, rf.Reason, defaultStr(rf.Type, "refund_only"), rf.Amount)
 	if err != nil {
 		return err
 	}
 	rf.ID, _ = res.LastInsertId()
+	// Record the initial "申请提交" track.
+	if _, err := tx.Exec(`INSERT INTO refund_tracks (refund_id, status, note) VALUES (?,?,?)`, rf.ID, "pending", "用户提交售后申请"); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -37,6 +49,7 @@ func (r *RefundRepo) ListByUser(userID int64) ([]model.Refund, error) {
 	for rows.Next() {
 		var rf model.Refund
 		if err := rows.Scan(&rf.ID, &rf.OrderID, &rf.UserID, &rf.Reason, &rf.Type, &rf.Amount, &rf.Status, &rf.AdminNote, &rf.CreatedAt); err == nil {
+			rf.Tracks, _ = r.listTracks(rf.ID)
 			out = append(out, rf)
 		}
 	}
@@ -55,13 +68,45 @@ func (r *RefundRepo) Get(id, userID int64) (*model.Refund, error) {
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
+	if err == nil {
+		rf.Tracks, _ = r.listTracks(rf.ID)
+	}
 	return rf, err
 }
 
-// UpdateStatus moves a refund through its lifecycle (admin action).
+// UpdateStatus moves a refund through its lifecycle (admin action) and appends a
+// track entry so the buyer sees a progress timeline.
 func (r *RefundRepo) UpdateStatus(id int64, status, note string) error {
-	_, err := r.db.Exec(`UPDATE refunds SET status=?, admin_note=? WHERE id=?`, status, note, id)
-	return err
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE refunds SET status=?, admin_note=? WHERE id=?`, status, note, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO refund_tracks (refund_id, status, note) VALUES (?,?,?)`, id, status, note); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// listTracks returns the chronological status log for a refund.
+func (r *RefundRepo) listTracks(refundID int64) ([]model.RefundTrack, error) {
+	rows, err := r.db.Query(
+		`SELECT id, refund_id, status, note, created_at FROM refund_tracks WHERE refund_id=? ORDER BY id ASC`, refundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.RefundTrack{}
+	for rows.Next() {
+		var t model.RefundTrack
+		if err := rows.Scan(&t.ID, &t.RefundID, &t.Status, &t.Note, &t.CreatedAt); err == nil {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 // ===================== Coupon =====================

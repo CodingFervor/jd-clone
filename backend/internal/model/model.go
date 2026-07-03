@@ -229,14 +229,24 @@ type SKU struct {
 
 // Refund is an after-sale return/refund request.
 type Refund struct {
+	ID        int64         `json:"id"`
+	OrderID   int64         `json:"order_id"`
+	UserID    int64         `json:"user_id"`
+	Reason    string        `json:"reason"`
+	Type      string        `json:"type"` // refund_only, return_refund
+	Amount    float64       `json:"amount"`
+	Status    string        `json:"status"` // pending, approved, rejected, completed
+	AdminNote string        `json:"admin_note"`
+	Tracks    []RefundTrack `json:"tracks,omitempty"` // chronological status log
+	CreatedAt time.Time     `json:"created_at"`
+}
+
+// RefundTrack is one step in a refund's lifecycle (售后进度节点).
+type RefundTrack struct {
 	ID        int64     `json:"id"`
-	OrderID   int64     `json:"order_id"`
-	UserID    int64     `json:"user_id"`
-	Reason    string    `json:"reason"`
-	Type      string    `json:"type"` // refund_only, return_refund
-	Amount    float64   `json:"amount"`
-	Status    string    `json:"status"` // pending, approved, rejected, completed
-	AdminNote string    `json:"admin_note"`
+	RefundID  int64     `json:"refund_id"`
+	Status    string    `json:"status"`
+	Note      string    `json:"note"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

@@ -62,6 +62,20 @@ func (r *SKURepo) CountByProduct(productID int64) (int, error) {
 	return n, err
 }
 
+// Recommend returns the best-value in-stock SKU for a product: the one with the
+// lowest unit price that still has stock. Returns nil if none are in stock.
+func (r *SKURepo) Recommend(productID int64) (*model.SKU, error) {
+	s := &model.SKU{}
+	err := r.db.QueryRow(
+		`SELECT id, product_id, spec, spec_text, price, stock, sku_code FROM skus
+		 WHERE product_id=? AND stock > 0 ORDER BY price ASC, id ASC LIMIT 1`, productID,
+	).Scan(&s.ID, &s.ProductID, &s.Spec, &s.SpecText, &s.Price, &s.Stock, &s.SKUCode)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return s, err
+}
+
 // ===================== Payment =====================
 
 type PaymentRepo struct{ db *sql.DB }
