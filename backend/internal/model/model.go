@@ -170,6 +170,22 @@ type SeckillDeal struct {
 	OriginalPrice float64 `json:"original_price"`
 }
 
+// GroupBuy is a team-purchase deal: N buyers unlock a discounted price (拼团).
+type GroupBuy struct {
+	ID         int64     `json:"id"`
+	ProductID  int64     `json:"product_id"`
+	GroupPrice float64   `json:"group_price"`
+	Required   int       `json:"required"`
+	Joined     int       `json:"joined"`
+	Status     string    `json:"status"` // active, success, expired
+	EndTime    time.Time `json:"end_time"`
+	CreatedAt  time.Time `json:"created_at"`
+	// Joined product fields (populated for list responses).
+	ProductName   string  `json:"product_name"`
+	ProductImage  string  `json:"product_image"`
+	OriginalPrice float64 `json:"original_price"`
+}
+
 // SKU is a specific spec combination (color/size/version) of a product.
 type SKU struct {
 	ID        int64   `json:"id"`

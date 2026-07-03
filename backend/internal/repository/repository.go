@@ -944,6 +944,120 @@ func (r *SeckillRepo) SeedSeckill() {
 	}
 }
 
+// ===================== Group buys (拼团) =====================
+
+type GroupBuyRepo struct{ db *sql.DB }
+
+func NewGroupBuyRepo(db *sql.DB) *GroupBuyRepo { return &GroupBuyRepo{db: db} }
+
+// ListActive returns open group-buy deals, joined with product info.
+func (r *GroupBuyRepo) ListActive(limit int) ([]model.GroupBuy, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.db.Query(
+		`SELECT g.id, g.product_id, g.group_price, g.required, g.joined, g.status, g.end_time, g.created_at,
+		        p.name, p.image, p.original_price
+		 FROM group_buys g JOIN products p ON p.id = g.product_id
+		 WHERE g.status='active' AND g.end_time > CURRENT_TIMESTAMP AND g.joined < g.required
+		 ORDER BY g.end_time ASC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.GroupBuy{}
+	for rows.Next() {
+		var g model.GroupBuy
+		if err := rows.Scan(&g.ID, &g.ProductID, &g.GroupPrice, &g.Required, &g.Joined, &g.Status, &g.EndTime, &g.CreatedAt,
+			&g.ProductName, &g.ProductImage, &g.OriginalPrice); err == nil {
+			out = append(out, g)
+		}
+	}
+	return out, nil
+}
+
+// Get returns a single group-buy deal by id.
+func (r *GroupBuyRepo) Get(id int64) (*model.GroupBuy, error) {
+	g := &model.GroupBuy{}
+	err := r.db.QueryRow(
+		`SELECT g.id, g.product_id, g.group_price, g.required, g.joined, g.status, g.end_time, g.created_at,
+		        p.name, p.image, p.original_price
+		 FROM group_buys g JOIN products p ON p.id = g.product_id WHERE g.id=?`, id,
+	).Scan(&g.ID, &g.ProductID, &g.GroupPrice, &g.Required, &g.Joined, &g.Status, &g.EndTime, &g.CreatedAt,
+		&g.ProductName, &g.ProductImage, &g.OriginalPrice)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return g, err
+}
+
+// Join adds a user to a group buy. When the required count is reached, the deal
+// flips to "success". Duplicate joins are rejected by the UNIQUE constraint.
+func (r *GroupBuyRepo) Join(id, userID int64) (*model.GroupBuy, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var joined, required int
+	err = tx.QueryRow(`SELECT joined, required FROM group_buys WHERE id=? AND status='active'`, id).Scan(&joined, &required)
+	if err != nil {
+		return nil, fmt.Errorf("拼团不存在或已结束")
+	}
+	if joined >= required {
+		return nil, fmt.Errorf("拼团已满")
+	}
+	if _, err := tx.Exec(`INSERT INTO group_buy_members (group_buy_id, user_id) VALUES (?,?)`, id, userID); err != nil {
+		return nil, fmt.Errorf("您已参与该拼团")
+	}
+	newJoined := joined + 1
+	if newJoined >= required {
+		if _, err := tx.Exec(`UPDATE group_buys SET joined=?, status='success' WHERE id=?`, newJoined, id); err != nil {
+			return nil, err
+		}
+	} else {
+		if _, err := tx.Exec(`UPDATE group_buys SET joined=? WHERE id=?`, newJoined, id); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return r.Get(id)
+}
+
+// SeedGroupBuys populates demo team-purchase deals if none exist yet.
+func (r *GroupBuyRepo) SeedGroupBuys() {
+	var n int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM group_buys`).Scan(&n)
+	if n > 0 {
+		return
+	}
+	rows, err := r.db.Query(`SELECT id, price FROM products ORDER BY id LIMIT 5`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	type pp struct {
+		id    int64
+		price float64
+	}
+	items := []pp{}
+	for rows.Next() {
+		var p pp
+		if rows.Scan(&p.id, &p.price) == nil {
+			items = append(items, p)
+		}
+	}
+	end := time.Now().Add(24 * time.Hour)
+	for i, p := range items {
+		required := 2 + (i % 3) // 2~4 buyers
+		_, _ = r.db.Exec(
+			`INSERT INTO group_buys (product_id, group_price, required, joined, status, end_time) VALUES (?,?,?,?,?,?)`,
+			p.id, p.price*0.7, required, 1, "active", end)
+	}
+}
+
 // ===================== helpers =====================
 
 func defaultStr(s, d string) string {

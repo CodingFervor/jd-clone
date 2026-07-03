@@ -270,6 +270,27 @@ func createTables() error {
 			status TEXT NOT NULL DEFAULT 'active'
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_seckill_active ON seckill_deals(status)`,
+		// Group buys: team-purchase deals requiring N buyers to unlock the price (拼团).
+		`CREATE TABLE IF NOT EXISTS group_buys (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			product_id INTEGER NOT NULL,
+			group_price REAL NOT NULL DEFAULT 0,
+			required INTEGER NOT NULL DEFAULT 2,
+			joined INTEGER NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'active',
+			end_time DATETIME NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_groupbuys_active ON group_buys(status)`,
+		// Group buy members: who joined which group buy (拼团成员).
+		`CREATE TABLE IF NOT EXISTS group_buy_members (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			group_buy_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(group_buy_id, user_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_gbm_group ON group_buy_members(group_buy_id)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.

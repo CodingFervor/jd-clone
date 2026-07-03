@@ -344,3 +344,38 @@ func (h *Handler) GrabSeckill(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": deal, "message": "抢购成功"})
 }
+
+// ===================== Group buys (拼团) =====================
+
+// ListGroupBuys: GET /group-buys (public)
+func (h *Handler) ListGroupBuys(c *gin.Context) {
+	deals, err := h.GroupBuy.ListActive(10)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": deals})
+}
+
+// JoinGroupBuy: POST /group-buys/:id/join — join a team purchase (requires auth).
+func (h *Handler) JoinGroupBuy(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		return
+	}
+	g, err := h.GroupBuy.Join(id, uid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	msg := "参团成功"
+	if g.Status == "success" {
+		msg = "拼团成功！"
+	}
+	c.JSON(http.StatusOK, gin.H{"data": g, "message": msg})
+}

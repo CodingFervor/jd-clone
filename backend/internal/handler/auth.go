@@ -34,6 +34,7 @@ type Handler struct {
 	CheckIn  *repository.CheckInRepo
 	Shop     *repository.PointShopRepo
 	Seckill  *repository.SeckillRepo
+	GroupBuy *repository.GroupBuyRepo
 	jwtKey   []byte
 }
 
@@ -57,6 +58,11 @@ func (h *Handler) SetHistory(hist *repository.HistoryRepo, ci *repository.CheckI
 // SetSeckill attaches the flash-sale repo.
 func (h *Handler) SetSeckill(s *repository.SeckillRepo) {
 	h.Seckill = s
+}
+
+// SetGroupBuy attaches the group-buy repo.
+func (h *Handler) SetGroupBuy(g *repository.GroupBuyRepo) {
+	h.GroupBuy = g
 }
 
 // ---- JWT (HS256, hand-rolled, no external dep) ----

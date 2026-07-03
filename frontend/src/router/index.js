@@ -23,6 +23,7 @@ const routes = [
   { path: '/checkin', name: 'checkin', component: () => import('../views/CheckIn.vue'), meta: { auth: true } },
   { path: '/points-shop', name: 'pointShop', component: () => import('../views/PointShop.vue'), meta: { auth: true } },
   { path: '/seckill', name: 'seckill', component: () => import('../views/Seckill.vue') },
+  { path: '/group-buy', name: 'groupBuy', component: () => import('../views/GroupBuy.vue') },
   { path: '/admin', name: 'admin', component: () => import('../views/Admin.vue') },
 ]
 

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast, showDialog } from 'vant'
 import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview } from '../api'
@@ -16,6 +16,14 @@ const reviewRating = ref(5)
 const reviewContent = ref('')
 const reviewImages = ref([])
 const favorited = ref(false)
+// Build the gallery list from the product's images field (comma-separated),
+// falling back to the single main image.
+const gallery = computed(() => {
+  if (!product.value) return []
+  const imgs = (product.value.images || '').split(',').map((s) => s.trim()).filter(Boolean)
+  if (imgs.length) return imgs
+  return product.value.image ? [product.value.image] : []
+})
 async function onUploadReviewImage(item) {
   try {
     const res = await uploadImage(item.file)
@@ -132,7 +140,13 @@ function fmt(n) {
   <div v-if="loading" class="loading"><van-loading /></div>
   <div v-else-if="product" class="detail">
     <van-nav-bar title="商品详情" left-arrow @click-left="router.back()" fixed placeholder />
-    <van-image width="100%" height="375" :src="product.image" fit="cover" />
+    <!-- Image gallery carousel: uses the multi-image field, falls back to the main image -->
+    <van-swipe class="gallery" :autoplay="3000" indicator-color="#e1251b" v-if="gallery.length > 1">
+      <van-swipe-item v-for="(img, i) in gallery" :key="i">
+        <van-image width="100%" height="375" :src="img" fit="cover" />
+      </van-swipe-item>
+    </van-swipe>
+    <van-image v-else width="100%" height="375" :src="product.image" fit="cover" />
     <div class="price-block">
       <span class="big-price">¥{{ fmt(currentPrice()) }}</span>
       <span class="origin">¥{{ fmt(product.original_price) }}</span>
