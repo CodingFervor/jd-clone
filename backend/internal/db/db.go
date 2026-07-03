@@ -74,6 +74,7 @@ func createTables() error {
 			sales INTEGER NOT NULL DEFAULT 0,
 			description TEXT NOT NULL DEFAULT '',
 			tags TEXT NOT NULL DEFAULT '',
+			video_url TEXT NOT NULL DEFAULT '',
 			is_seckill INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -335,6 +336,18 @@ func createTables() error {
 			recorded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_price_history_product ON price_history(product_id)`,
+		// Shop ratings: aggregate buyer scores for a shop (店铺评分).
+		`CREATE TABLE IF NOT EXISTS shop_ratings (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			shop TEXT NOT NULL,
+			user_id INTEGER NOT NULL,
+			description_score INTEGER NOT NULL DEFAULT 5,
+			logistics_score INTEGER NOT NULL DEFAULT 5,
+			service_score INTEGER NOT NULL DEFAULT 5,
+			comment TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_shop_ratings_shop ON shop_ratings(shop)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.
@@ -368,6 +381,8 @@ func migrate() error {
 	_, _ = DB.Exec(`ALTER TABLE reviews ADD COLUMN images TEXT NOT NULL DEFAULT ''`)
 	// Add the remark column to orders (订单备注).
 	_, _ = DB.Exec(`ALTER TABLE orders ADD COLUMN remark TEXT NOT NULL DEFAULT ''`)
+	// Add the video_url column to products (商品视频介绍).
+	_, _ = DB.Exec(`ALTER TABLE products ADD COLUMN video_url TEXT NOT NULL DEFAULT ''`)
 	return nil
 }
 

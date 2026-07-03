@@ -74,6 +74,8 @@ func main() {
 	priceHistoryRepo := repository.NewPriceHistoryRepo(db.DB)
 	priceHistoryRepo.SeedPriceHistory()
 	h.SetPriceHistory(priceHistoryRepo)
+	// Attach the shop-rating (店铺评分) repo.
+	h.SetShopRating(repository.NewShopRatingRepo(db.DB))
 
 	// Ensure the images directory exists for the static file server.
 	_ = os.MkdirAll("data/images", 0o755)

@@ -34,6 +34,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		api.GET("/products/:id/skus", h.ListSKUs)
 		api.GET("/products/:id/price-history", h.ListPriceHistory)
 
+		// Public shop ratings summary
+		api.GET("/shops/:name/ratings", h.ShopRatingSummary)
+
 		// Public FTS5 search + suggest
 		api.GET("/search", h.FtsSearch)
 		api.GET("/search/suggest", h.FtsSuggest)
@@ -55,6 +58,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		auth.Use(authMiddleware(h))
 		{
 			auth.GET("/auth/profile", h.Profile)
+
+			// Shop rating create
+			auth.POST("/shops/:name/ratings", h.CreateShopRating)
 
 			auth.GET("/cart", h.ListCart)
 			auth.POST("/cart", h.AddCart)

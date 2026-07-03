@@ -441,3 +441,42 @@ func (h *Handler) ListPriceHistory(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": list, "stats": stats})
 }
+
+// ===================== Shop ratings (店铺评分) =====================
+
+// ShopRatingSummary: GET /shops/:name/ratings (public)
+func (h *Handler) ShopRatingSummary(c *gin.Context) {
+	shop := c.Param("name")
+	summary, err := h.ShopRating.Summary(shop)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	list, _ := h.ShopRating.ListByShop(shop, 10)
+	c.JSON(http.StatusOK, gin.H{"summary": summary, "ratings": list})
+}
+
+// CreateShopRating: POST /shops/:name/ratings (requires auth)
+func (h *Handler) CreateShopRating(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	shop := c.Param("name")
+	var req struct {
+		DescriptionScore int    `json:"description_score"`
+		LogisticsScore   int    `json:"logistics_score"`
+		ServiceScore     int    `json:"service_score"`
+		Comment          string `json:"comment"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数不合法"})
+		return
+	}
+	s := &model.ShopRating{Shop: shop, UserID: uid, DescriptionScore: req.DescriptionScore, LogisticsScore: req.LogisticsScore, ServiceScore: req.ServiceScore, Comment: req.Comment}
+	if err := h.ShopRating.Create(s); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "评价失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": s})
+}

@@ -37,6 +37,7 @@ type Handler struct {
 	GroupBuy     *repository.GroupBuyRepo
 	Presale      *repository.PresaleRepo
 	PriceHistory *repository.PriceHistoryRepo
+	ShopRating   *repository.ShopRatingRepo
 	jwtKey       []byte
 }
 
@@ -75,6 +76,11 @@ func (h *Handler) SetPresale(p *repository.PresaleRepo) {
 // SetPriceHistory attaches the price-history repo.
 func (h *Handler) SetPriceHistory(ph *repository.PriceHistoryRepo) {
 	h.PriceHistory = ph
+}
+
+// SetShopRating attaches the shop-rating repo.
+func (h *Handler) SetShopRating(sr *repository.ShopRatingRepo) {
+	h.ShopRating = sr
 }
 
 // ---- JWT (HS256, hand-rolled, no external dep) ----

@@ -29,7 +29,8 @@ type Product struct {
 	Price         float64   `json:"price"`
 	OriginalPrice float64   `json:"original_price"`
 	Image         string    `json:"image"`
-	Images        string    `json:"images"` // comma-separated gallery
+	Images        string    `json:"images"`    // comma-separated gallery
+	VideoURL      string    `json:"video_url"` // optional product intro video
 	Category      string    `json:"category"`
 	CategoryID    int64     `json:"category_id"`
 	Shop          string    `json:"shop"`
@@ -39,6 +40,29 @@ type Product struct {
 	Tags          string    `json:"tags"`
 	IsSeckill     int       `json:"is_seckill"`
 	CreatedAt     time.Time `json:"created_at"`
+}
+
+// ShopRating is a buyer's multi-dimension score for a shop (店铺评分).
+type ShopRating struct {
+	ID               int64     `json:"id"`
+	Shop             string    `json:"shop"`
+	UserID           int64     `json:"user_id"`
+	DescriptionScore int       `json:"description_score"` // 描述相符
+	LogisticsScore   int       `json:"logistics_score"`   // 物流服务
+	ServiceScore     int       `json:"service_score"`     // 服务态度
+	Comment          string    `json:"comment"`
+	Username         string    `json:"username"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+// ShopRatingSummary is the aggregate stats for a shop.
+type ShopRatingSummary struct {
+	Shop           string  `json:"shop"`
+	Overall        float64 `json:"overall"`
+	DescriptionAvg float64 `json:"description_avg"`
+	LogisticsAvg   float64 `json:"logistics_avg"`
+	ServiceAvg     float64 `json:"service_avg"`
+	Count          int     `json:"count"`
 }
 
 // CartItem is an entry in a user's shopping cart.

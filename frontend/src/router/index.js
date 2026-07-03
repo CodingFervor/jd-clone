@@ -25,6 +25,7 @@ const routes = [
   { path: '/seckill', name: 'seckill', component: () => import('../views/Seckill.vue') },
   { path: '/group-buy', name: 'groupBuy', component: () => import('../views/GroupBuy.vue') },
   { path: '/presale', name: 'presale', component: () => import('../views/Presale.vue') },
+  { path: '/shop/:name', name: 'shopRatings', component: () => import('../views/ShopRatings.vue') },
   { path: '/admin', name: 'admin', component: () => import('../views/Admin.vue') },
 ]
 

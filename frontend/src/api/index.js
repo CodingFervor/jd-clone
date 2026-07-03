@@ -140,4 +140,8 @@ export const payPresaleDeposit = (id) => http.post(`/presales/${id}/deposit`).th
 // ---- Price history (比价历史) ----
 export const getPriceHistory = (id) => http.get(`/products/${id}/price-history`).then((r) => r.data)
 
+// ---- Shop ratings (店铺评分) ----
+export const getShopRatings = (name) => http.get(`/shops/${encodeURIComponent(name)}/ratings`).then((r) => r.data)
+export const createShopRating = (name, payload) => http.post(`/shops/${encodeURIComponent(name)}/ratings`, payload).then((r) => r.data.data)
+
 export { errMsg }
