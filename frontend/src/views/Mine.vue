@@ -82,6 +82,7 @@ function logout() {
       <van-cell title="每日签到" is-link @click="router.push('/checkin')" icon="calendar-o" />
       <van-cell title="积分商城" is-link @click="router.push('/points-shop')" icon="gold-coin-o" />
       <van-cell title="超值拼团" is-link @click="router.push('/group-buy')" icon="friends-o" />
+      <van-cell title="预售专区" is-link @click="router.push('/presale')" icon="underway-o" />
       <van-cell title="售后服务" is-link @click="router.push('/refunds')" icon="after-sale" />
       <van-cell title="优惠券" is-link @click="router.push('/coupons')" icon="coupon-o" />
       <van-cell title="收货地址" is-link icon="location-o" @click="router.push('/addresses')" />

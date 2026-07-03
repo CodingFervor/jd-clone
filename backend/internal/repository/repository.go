@@ -1058,6 +1058,119 @@ func (r *GroupBuyRepo) SeedGroupBuys() {
 	}
 }
 
+// ===================== Presales (预售定金) =====================
+
+type PresaleRepo struct{ db *sql.DB }
+
+func NewPresaleRepo(db *sql.DB) *PresaleRepo { return &PresaleRepo{db: db} }
+
+// ListActive returns open presale deals, joined with product info.
+func (r *PresaleRepo) ListActive(limit int) ([]model.Presale, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.db.Query(
+		`SELECT s.id, s.product_id, s.deposit, s.balance, s.final_price, s.stock, s.sold, s.deposit_end, s.balance_start, s.status,
+		        p.name, p.image, p.original_price
+		 FROM presales s JOIN products p ON p.id = s.product_id
+		 WHERE s.status='active' AND s.deposit_end > CURRENT_TIMESTAMP AND s.stock > s.sold
+		 ORDER BY s.deposit_end ASC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.Presale{}
+	for rows.Next() {
+		var s model.Presale
+		if err := rows.Scan(&s.ID, &s.ProductID, &s.Deposit, &s.Balance, &s.FinalPrice, &s.Stock, &s.Sold, &s.DepositEnd, &s.BalanceStart, &s.Status,
+			&s.ProductName, &s.ProductImage, &s.OriginalPrice); err == nil {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+// Get returns a single presale by id.
+func (r *PresaleRepo) Get(id int64) (*model.Presale, error) {
+	s := &model.Presale{}
+	err := r.db.QueryRow(
+		`SELECT s.id, s.product_id, s.deposit, s.balance, s.final_price, s.stock, s.sold, s.deposit_end, s.balance_start, s.status,
+		        p.name, p.image, p.original_price
+		 FROM presales s JOIN products p ON p.id = s.product_id WHERE s.id=?`, id,
+	).Scan(&s.ID, &s.ProductID, &s.Deposit, &s.Balance, &s.FinalPrice, &s.Stock, &s.Sold, &s.DepositEnd, &s.BalanceStart, &s.Status,
+		&s.ProductName, &s.ProductImage, &s.OriginalPrice)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return s, err
+}
+
+// PayDeposit records a user paying the deposit for a presale (transactional:
+// enforces stock + dedups via UNIQUE).
+func (r *PresaleRepo) PayDeposit(id, userID int64) (*model.PresaleOrder, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var stock, sold int
+	var deposit float64
+	err = tx.QueryRow(`SELECT stock, sold, deposit FROM presales WHERE id=? AND status='active'`, id).Scan(&stock, &sold, &deposit)
+	if err != nil {
+		return nil, fmt.Errorf("预售不存在或已结束")
+	}
+	if stock <= sold {
+		return nil, fmt.Errorf("预售名额已满")
+	}
+	res, err := tx.Exec(`INSERT INTO presale_orders (presale_id, user_id, deposit_paid) VALUES (?,?,?)`, id, userID, deposit)
+	if err != nil {
+		return nil, fmt.Errorf("您已参与该预售")
+	}
+	if _, err := tx.Exec(`UPDATE presales SET sold = sold + 1 WHERE id=?`, id); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	oid, _ := res.LastInsertId()
+	return &model.PresaleOrder{ID: oid, PresaleID: id, UserID: userID, DepositPaid: deposit, Status: "deposit"}, nil
+}
+
+// SeedPresales populates demo deposit deals if none exist yet.
+func (r *PresaleRepo) SeedPresales() {
+	var n int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM presales`).Scan(&n)
+	if n > 0 {
+		return
+	}
+	rows, err := r.db.Query(`SELECT id, price FROM products ORDER BY id LIMIT 5`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	type pp struct {
+		id    int64
+		price float64
+	}
+	items := []pp{}
+	for rows.Next() {
+		var p pp
+		if rows.Scan(&p.id, &p.price) == nil {
+			items = append(items, p)
+		}
+	}
+	depositEnd := time.Now().Add(48 * time.Hour)
+	balanceStart := time.Now().Add(72 * time.Hour)
+	for _, p := range items {
+		final := p.price * 0.85 // 85折尾款价
+		deposit := p.price * 0.1
+		balance := final - deposit
+		_, _ = r.db.Exec(
+			`INSERT INTO presales (product_id, deposit, balance, final_price, stock, sold, deposit_end, balance_start, status) VALUES (?,?,?,?,?,?,?,?,?)`,
+			p.id, deposit, balance, final, 30, 0, depositEnd, balanceStart, "active")
+	}
+}
+
 // ===================== helpers =====================
 
 func defaultStr(s, d string) string {

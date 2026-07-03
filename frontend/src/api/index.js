@@ -133,4 +133,8 @@ export const grabSeckill = (id) => http.post(`/seckill/${id}/grab`).then((r) => 
 export const getGroupBuys = () => http.get('/group-buys').then((r) => r.data.data)
 export const joinGroupBuy = (id) => http.post(`/group-buys/${id}/join`).then((r) => r.data)
 
+// ---- Presales (预售定金) ----
+export const getPresales = () => http.get('/presales').then((r) => r.data.data)
+export const payPresaleDeposit = (id) => http.post(`/presales/${id}/deposit`).then((r) => r.data)
+
 export { errMsg }

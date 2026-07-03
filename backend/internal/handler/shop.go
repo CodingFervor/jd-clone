@@ -185,13 +185,26 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 		total += p.Price * float64(it.Quantity)
 	}
 	itemsJSON, _ := json.Marshal(lines)
-	o := &model.Order{UserID: uid, Total: total, Status: "pending", ItemsJSON: string(itemsJSON), Address: req.Address}
+	// Apply a claimed coupon if one was selected at checkout.
+	discount, dErr := 0.0, error(nil)
+	if req.UserCouponID > 0 && h.Coupon != nil {
+		discount, dErr = h.Coupon.ApplyCoupon(req.UserCouponID, uid, total)
+		if dErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": dErr.Error()})
+			return
+		}
+	}
+	finalTotal := total - discount
+	if finalTotal < 0 {
+		finalTotal = 0
+	}
+	o := &model.Order{UserID: uid, Total: finalTotal, Status: "pending", ItemsJSON: string(itemsJSON), Address: req.Address}
 	if err := h.Order.Create(o); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "下单失败"})
 		return
 	}
 	_ = h.Cart.Clear(uid)
-	c.JSON(http.StatusOK, gin.H{"data": o})
+	c.JSON(http.StatusOK, gin.H{"data": o, "discount": discount, "original_total": total})
 }
 
 func (h *Handler) ListOrders(c *gin.Context) {

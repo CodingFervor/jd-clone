@@ -379,3 +379,34 @@ func (h *Handler) JoinGroupBuy(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": g, "message": msg})
 }
+
+// ===================== Presales (预售定金) =====================
+
+// ListPresales: GET /presales (public)
+func (h *Handler) ListPresales(c *gin.Context) {
+	list, err := h.Presale.ListActive(10)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list})
+}
+
+// PayPresaleDeposit: POST /presales/:id/deposit — pay the deposit (requires auth).
+func (h *Handler) PayPresaleDeposit(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		return
+	}
+	po, err := h.Presale.PayDeposit(id, uid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": po, "message": "定金支付成功"})
+}

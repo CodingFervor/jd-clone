@@ -35,6 +35,7 @@ type Handler struct {
 	Shop     *repository.PointShopRepo
 	Seckill  *repository.SeckillRepo
 	GroupBuy *repository.GroupBuyRepo
+	Presale  *repository.PresaleRepo
 	jwtKey   []byte
 }
 
@@ -63,6 +64,11 @@ func (h *Handler) SetSeckill(s *repository.SeckillRepo) {
 // SetGroupBuy attaches the group-buy repo.
 func (h *Handler) SetGroupBuy(g *repository.GroupBuyRepo) {
 	h.GroupBuy = g
+}
+
+// SetPresale attaches the presale repo.
+func (h *Handler) SetPresale(p *repository.PresaleRepo) {
+	h.Presale = p
 }
 
 // ---- JWT (HS256, hand-rolled, no external dep) ----

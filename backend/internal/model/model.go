@@ -186,6 +186,36 @@ type GroupBuy struct {
 	OriginalPrice float64 `json:"original_price"`
 }
 
+// Presale is a deposit-then-balance deal (预售定金): pay a deposit now, the
+// balance later, at a discounted final price.
+type Presale struct {
+	ID           int64     `json:"id"`
+	ProductID    int64     `json:"product_id"`
+	Deposit      float64   `json:"deposit"`
+	Balance      float64   `json:"balance"`
+	FinalPrice   float64   `json:"final_price"`
+	Stock        int       `json:"stock"`
+	Sold         int       `json:"sold"`
+	DepositEnd   time.Time `json:"deposit_end"`
+	BalanceStart time.Time `json:"balance_start"`
+	Status       string    `json:"status"`
+	// Joined product fields (populated for list responses).
+	ProductName   string  `json:"product_name"`
+	ProductImage  string  `json:"product_image"`
+	OriginalPrice float64 `json:"original_price"`
+}
+
+// PresaleOrder records a user's deposit/balance payments for a presale.
+type PresaleOrder struct {
+	ID          int64   `json:"id"`
+	PresaleID   int64   `json:"presale_id"`
+	UserID      int64   `json:"user_id"`
+	DepositPaid float64 `json:"deposit_paid"`
+	BalancePaid float64 `json:"balance_paid"`
+	Status      string  `json:"status"` // deposit, paid, cancelled
+	ProductName string  `json:"product_name"`
+}
+
 // SKU is a specific spec combination (color/size/version) of a product.
 type SKU struct {
 	ID        int64   `json:"id"`
@@ -291,8 +321,9 @@ type UpdateCartRequest struct {
 }
 
 type CreateOrderRequest struct {
-	Items   []OrderItemInput `json:"items" binding:"required"`
-	Address string           `json:"address"`
+	Items        []OrderItemInput `json:"items" binding:"required"`
+	Address      string           `json:"address"`
+	UserCouponID int64            `json:"user_coupon_id"` // optional: a claimed coupon to apply
 }
 type OrderItemInput struct {
 	ProductID int64 `json:"product_id" binding:"required"`

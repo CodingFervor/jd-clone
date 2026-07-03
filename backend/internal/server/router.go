@@ -43,6 +43,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		// Public group-buy (拼团) listing
 		api.GET("/group-buys", h.ListGroupBuys)
 
+		// Public presale (预售定金) listing
+		api.GET("/presales", h.ListPresales)
+
 		// Public shipment tracking by tracking number
 		api.GET("/shipments/track", h.TrackByNo)
 
@@ -91,6 +94,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 
 			// Group buy join (拼团参团)
 			auth.POST("/group-buys/:id/join", h.JoinGroupBuy)
+
+			// Presale deposit (预售定金)
+			auth.POST("/presales/:id/deposit", h.PayPresaleDeposit)
 
 			// Browse history
 			auth.GET("/history", h.ListHistory)
