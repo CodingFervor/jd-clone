@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,6 +11,10 @@ const reviews = ref([])
 const skus = ref([])
 const selectedSKU = ref(null)
 const recommendedSKU = ref(null)
+// Price history (比价历史)
+const priceHistory = ref([])
+const priceStats = ref(null)
+const showPriceHistory = ref(false)
 const loading = ref(true)
 const showReview = ref(false)
 const reviewRating = ref(5)
@@ -51,6 +55,8 @@ onMounted(async () => {
     if (localStorage.getItem('jd_token')) {
       favorited.value = await checkFavorite(route.params.id)
     }
+    // Load price history (best-effort).
+    getPriceHistory(route.params.id).then((d) => { priceHistory.value = d.data || []; priceStats.value = d.stats }).catch(() => {})
   } catch (e) {
     showToast('商品不存在')
   } finally {
@@ -140,6 +146,27 @@ async function submitReply(r) {
 function fmt(n) {
   return Number(n).toFixed(2)
 }
+// Map price-history points to bar heights (0-100%) relative to the range.
+function priceBars() {
+  if (!priceHistory.value.length) return []
+  const prices = priceHistory.value.map((p) => p.price)
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  const range = max - min || 1
+  return priceHistory.value.map((p) => ({
+    price: p.price,
+    height: 30 + Math.round(((p.price - min) / range) * 70), // 30-100%
+    date: String(p.recorded_at).slice(5, 10), // MM-DD
+  }))
+}
+function priceTrend() {
+  if (!priceHistory.value.length || priceHistory.value.length < 2) return 'flat'
+  const first = priceHistory.value[0].price
+  const last = priceHistory.value[priceHistory.value.length - 1].price
+  if (last < first) return 'down'
+  if (last > first) return 'up'
+  return 'flat'
+}
 </script>
 
 <template>
@@ -182,6 +209,24 @@ function fmt(n) {
       <van-cell title="销量" :value="product.sales + '人付款'" />
       <van-cell title="标签" :value="product.tags || '京东自营'" />
     </van-cell-group>
+    <!-- Price history (比价历史) -->
+    <div v-if="priceHistory.length" class="price-history">
+      <div class="ph-head">
+        <span>📈 比价历史</span>
+        <span v-if="priceStats" class="ph-stats">
+          最低 <b class="green">¥{{ fmt(priceStats.lowest) }}</b>
+          <span v-if="priceTrend() === 'down'" class="trend down">↓降价</span>
+          <span v-else-if="priceTrend() === 'up'" class="trend up">↑涨价</span>
+          <span v-else class="trend flat">→平稳</span>
+        </span>
+      </div>
+      <div class="ph-chart">
+        <div v-for="(b, i) in priceBars()" :key="i" class="ph-bar-col">
+          <div class="ph-bar" :style="{ height: b.height + '%' }"></div>
+          <span class="ph-date">{{ b.date }}</span>
+        </div>
+      </div>
+    </div>
     <div v-if="product.description" class="desc">
       <h3>商品详情</h3>
       <p>{{ product.description }}</p>
@@ -261,6 +306,18 @@ function fmt(n) {
 .p-title { font-size: 17px; line-height: 24px; }
 .p-sub { color: #999; font-size: 13px; margin-top: 4px; }
 .desc, .reviews { background: #fff; margin-top: 8px; padding: 12px 16px; }
+.price-history { background: #fff; margin-top: 8px; padding: 12px 16px; }
+.ph-head { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: bold; margin-bottom: 10px; }
+.ph-stats { font-size: 12px; color: #666; font-weight: normal; }
+.ph-stats b.green { color: #07c160; }
+.trend { margin-left: 6px; font-size: 11px; }
+.trend.down { color: #07c160; }
+.trend.up { color: #e1251b; }
+.trend.flat { color: #999; }
+.ph-chart { display: flex; align-items: flex-end; gap: 6px; height: 80px; }
+.ph-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+.ph-bar { width: 60%; background: linear-gradient(180deg, #ff9800, #e1251b); border-radius: 3px 3px 0 0; min-height: 8px; }
+.ph-date { font-size: 9px; color: #999; margin-top: 4px; }
 .desc h3, .rev-head { font-size: 15px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
 .rev-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }

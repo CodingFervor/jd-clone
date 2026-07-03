@@ -70,6 +70,10 @@ func main() {
 	presaleRepo := repository.NewPresaleRepo(db.DB)
 	presaleRepo.SeedPresales()
 	h.SetPresale(presaleRepo)
+	// Attach + seed the price-history (比价历史) repo.
+	priceHistoryRepo := repository.NewPriceHistoryRepo(db.DB)
+	priceHistoryRepo.SeedPriceHistory()
+	h.SetPriceHistory(priceHistoryRepo)
 
 	// Ensure the images directory exists for the static file server.
 	_ = os.MkdirAll("data/images", 0o755)

@@ -410,3 +410,34 @@ func (h *Handler) PayPresaleDeposit(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": po, "message": "定金支付成功"})
 }
+
+// ===================== Price history (比价历史) =====================
+
+// ListPriceHistory: GET /products/:id/price-history (public)
+func (h *Handler) ListPriceHistory(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的商品ID"})
+		return
+	}
+	list, err := h.PriceHistory.ListByProduct(id, 30)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	// Compute trend stats: lowest, highest, current.
+	stats := gin.H{"lowest": 0.0, "highest": 0.0, "current": 0.0}
+	if len(list) > 0 {
+		low, high := list[0].Price, list[0].Price
+		for _, p := range list {
+			if p.Price < low {
+				low = p.Price
+			}
+			if p.Price > high {
+				high = p.Price
+			}
+		}
+		stats = gin.H{"lowest": low, "highest": high, "current": list[len(list)-1].Price}
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list, "stats": stats})
+}

@@ -137,4 +137,7 @@ export const joinGroupBuy = (id) => http.post(`/group-buys/${id}/join`).then((r)
 export const getPresales = () => http.get('/presales').then((r) => r.data.data)
 export const payPresaleDeposit = (id) => http.post(`/presales/${id}/deposit`).then((r) => r.data)
 
+// ---- Price history (比价历史) ----
+export const getPriceHistory = (id) => http.get(`/products/${id}/price-history`).then((r) => r.data)
+
 export { errMsg }

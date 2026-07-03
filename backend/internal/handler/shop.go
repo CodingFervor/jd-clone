@@ -200,7 +200,7 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 	if finalTotal < 0 {
 		finalTotal = 0
 	}
-	o := &model.Order{UserID: uid, Total: finalTotal, Status: "pending", ItemsJSON: string(itemsJSON), Address: req.Address}
+	o := &model.Order{UserID: uid, Total: finalTotal, Status: "pending", ItemsJSON: string(itemsJSON), Address: req.Address, Remark: req.Remark}
 	if err := h.Order.Create(o); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "下单失败"})
 		return

@@ -7,6 +7,7 @@ import { getCart, createOrder, getMyCoupons } from '../api'
 const router = useRouter()
 const items = ref([])
 const address = ref('')
+const remark = ref('')
 const coupons = ref([])
 const selectedCouponId = ref(null) // user_coupon_id
 const showCouponPicker = ref(false)
@@ -52,6 +53,7 @@ async function submit() {
       items: items.value.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
       address: address.value,
       user_coupon_id: selectedCouponId.value || undefined,
+      remark: remark.value,
     })
     showSuccessToast('下单成功')
     router.replace('/orders')
@@ -67,6 +69,7 @@ function fmt(n) { return Number(n).toFixed(2) }
     <van-nav-bar title="确认订单" left-arrow @click-left="router.back()" fixed placeholder />
     <van-cell-group inset title="收货信息">
       <van-field v-model="address" label="收货地址" placeholder="省市区 + 详细地址" rows="2" type="textarea" />
+      <van-field v-model="remark" label="订单备注" placeholder="选填，如送货时间、发票等" />
     </van-cell-group>
     <van-cell-group inset title="商品清单">
       <div v-for="it in items" :key="it.id" class="ci">

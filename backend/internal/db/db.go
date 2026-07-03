@@ -96,6 +96,7 @@ func createTables() error {
 			status TEXT NOT NULL DEFAULT 'pending',
 			items_json TEXT NOT NULL,
 			address TEXT NOT NULL DEFAULT '',
+			remark TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id)`,
@@ -326,6 +327,14 @@ func createTables() error {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_refund_tracks_refund ON refund_tracks(refund_id)`,
+		// Price history: snapshots of a product's price over time (比价历史).
+		`CREATE TABLE IF NOT EXISTS price_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			product_id INTEGER NOT NULL,
+			price REAL NOT NULL,
+			recorded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_price_history_product ON price_history(product_id)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.
@@ -357,6 +366,8 @@ func createTables() error {
 func migrate() error {
 	// Add the images column to reviews (added after launch) — multi-photo 评价晒图.
 	_, _ = DB.Exec(`ALTER TABLE reviews ADD COLUMN images TEXT NOT NULL DEFAULT ''`)
+	// Add the remark column to orders (订单备注).
+	_, _ = DB.Exec(`ALTER TABLE orders ADD COLUMN remark TEXT NOT NULL DEFAULT ''`)
 	return nil
 }
 

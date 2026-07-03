@@ -65,7 +65,16 @@ type Order struct {
 	Status    string    `json:"status"` // pending, paid, shipped, completed, cancelled
 	ItemsJSON string    `json:"items_json"`
 	Address   string    `json:"address"`
+	Remark    string    `json:"remark"` // 订单备注
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// PriceHistory is one historical price snapshot of a product (比价历史).
+type PriceHistory struct {
+	ID         int64     `json:"id"`
+	ProductID  int64     `json:"product_id"`
+	Price      float64   `json:"price"`
+	RecordedAt time.Time `json:"recorded_at"`
 }
 
 // Review is a buyer's rating of a product.
@@ -334,6 +343,7 @@ type CreateOrderRequest struct {
 	Items        []OrderItemInput `json:"items" binding:"required"`
 	Address      string           `json:"address"`
 	UserCouponID int64            `json:"user_coupon_id"` // optional: a claimed coupon to apply
+	Remark       string           `json:"remark"`         // 订单备注
 }
 type OrderItemInput struct {
 	ProductID int64 `json:"product_id" binding:"required"`

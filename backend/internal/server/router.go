@@ -32,6 +32,7 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		api.GET("/products/:id", h.GetProduct)
 		api.GET("/products/:id/reviews", h.ListReviews)
 		api.GET("/products/:id/skus", h.ListSKUs)
+		api.GET("/products/:id/price-history", h.ListPriceHistory)
 
 		// Public FTS5 search + suggest
 		api.GET("/search", h.FtsSearch)
