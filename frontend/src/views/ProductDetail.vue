@@ -15,6 +15,7 @@ const recommendedSKU = ref(null)
 const priceHistory = ref([])
 const priceStats = ref(null)
 const showPriceHistory = ref(false)
+const showPoster = ref(false)
 const loading = ref(true)
 const showReview = ref(false)
 const reviewRating = ref(5)
@@ -146,6 +147,23 @@ async function submitReply(r) {
 function fmt(n) {
   return Number(n).toFixed(2)
 }
+// Deterministic pseudo-QR pattern for the share poster (purely decorative).
+function qrPattern(n) {
+  const row = Math.floor((n - 1) / 8)
+  const col = (n - 1) % 8
+  // Corner finder squares.
+  const corner = (row < 2 || row > 5) && (col < 2 || col > 5)
+  return corner || ((row * 7 + col * 3 + n) % 3 === 0)
+}
+async function copyShareLink() {
+  const link = window.location.href
+  try {
+    await navigator.clipboard.writeText(link)
+    showSuccessToast('链接已复制')
+  } catch (e) {
+    showToast('复制失败，请手动复制')
+  }
+}
 // Map price-history points to bar heights (0-100%) relative to the range.
 function priceBars() {
   if (!priceHistory.value.length) return []
@@ -264,11 +282,34 @@ function priceTrend() {
     <!-- Bottom action bar -->
     <van-action-bar>
       <van-action-bar-icon icon="chat-o" text="客服" @click="showToast('客服功能为演示')" />
+      <van-action-bar-icon icon="share-o" text="分享" @click="showPoster = true" />
       <van-action-bar-icon :icon="favorited ? 'star' : 'star-o'" :text="favorited ? '已收藏' : '收藏'" :color="favorited ? '#e1251b' : '#323233'" @click="doFavorite" />
       <van-action-bar-icon icon="cart-o" text="购物车" @click="router.push('/cart')" />
       <van-action-bar-button color="#ff976a" type="warning" text="加入购物车" @click="doAddCart" />
       <van-action-bar-button color="#e1251b" type="danger" text="立即购买" @click="buyNow" />
     </van-action-bar>
+
+    <!-- Share poster popup -->
+    <van-popup v-model:show="showPoster" round closeable position="bottom" :style="{ width: '85%' }">
+      <div class="poster">
+        <div class="poster-head">分享给好友</div>
+        <div class="poster-card">
+          <van-image width="100%" height="200" radius="8" :src="product.image" fit="cover" />
+          <div class="pc-name van-multi-ellipsis--l2">{{ product.name }}</div>
+          <div class="pc-price">¥{{ fmt(currentPrice()) }}</div>
+          <div class="pc-qr">
+            <div class="qr-box">
+              <div class="qr-grid">
+                <div v-for="n in 64" :key="n" class="qr-cell" :class="{ on: qrPattern(n) }"></div>
+              </div>
+            </div>
+            <div class="qr-text">扫码查看商品</div>
+          </div>
+          <div class="pc-brand">京东 JD.COM</div>
+        </div>
+        <van-button block type="danger" round style="margin-top: 12px" @click="copyShareLink">复制分享链接</van-button>
+      </div>
+    </van-popup>
 
     <!-- Review popup -->
     <van-popup v-model:show="showReview" position="bottom" round closeable>
@@ -341,4 +382,16 @@ function priceTrend() {
 .rev-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .rev-img-wrap { position: relative; }
 .rev-img-del { position: absolute; top: -6px; right: -6px; background: #e1251b; color: #fff; border-radius: 50%; padding: 2px; font-size: 12px; }
+.poster { padding: 20px; }
+.poster-head { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 16px; }
+.poster-card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 16px; text-align: center; }
+.pc-name { font-size: 15px; line-height: 22px; margin: 12px 0 6px; text-align: left; }
+.pc-price { color: #e1251b; font-size: 24px; font-weight: bold; text-align: left; }
+.pc-qr { display: flex; flex-direction: column; align-items: center; margin-top: 16px; }
+.qr-box { padding: 8px; border: 1px solid #eee; border-radius: 8px; }
+.qr-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; width: 120px; height: 120px; }
+.qr-cell { background: #fff; }
+.qr-cell.on { background: #333; }
+.qr-text { font-size: 11px; color: #999; margin-top: 6px; }
+.pc-brand { color: #e1251b; font-size: 13px; font-weight: bold; margin-top: 12px; }
 </style>

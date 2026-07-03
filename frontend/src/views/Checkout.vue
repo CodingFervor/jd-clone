@@ -19,6 +19,21 @@ const usableCoupons = computed(() =>
   (coupons.value || []).filter((c) => c.is_used === 0 && (!c.coupon || subtotal.value >= c.coupon.threshold))
 )
 
+// Top-up hints: claimed coupons just below the threshold (凑单提示).
+const topupHints = computed(() => {
+  const hints = []
+  for (const c of (coupons.value || [])) {
+    if (c.is_used === 0 && c.coupon && subtotal.value < c.coupon.threshold) {
+      const diff = Math.ceil(c.coupon.threshold - subtotal.value)
+      // Only suggest coupons within 50 yuan of the threshold.
+      if (diff <= 50) {
+        hints.push({ id: c.id, diff, label: c.coupon.coupon_type === 'discount' ? `${(c.coupon.value * 10).toFixed(1)}折券` : `满${c.coupon.threshold}减${c.coupon.value}` })
+      }
+    }
+  }
+  return hints.sort((a, b) => a.diff - b.diff)
+})
+
 // Compute the discount for the selected coupon.
 const discount = computed(() => {
   const uc = usableCoupons.value.find((c) => c.id === selectedCouponId.value)
@@ -88,6 +103,12 @@ function fmt(n) { return Number(n).toFixed(2) }
         @click="showCouponPicker = true"
       />
     </van-cell-group>
+    <!-- Top-up hints (凑单提示) -->
+    <div v-if="topupHints.length" class="topup-hints">
+      <div v-for="h in topupHints.slice(0, 2)" :key="h.id" class="th-item">
+        💡 再买 <b>¥{{ h.diff }}</b> 可使用 {{ h.label }}，<span class="th-go" @click="router.push('/home')">去凑单 ›</span>
+      </div>
+    </div>
     <div class="price-detail">
       <div class="pd-row"><span>商品总额</span><span>¥{{ fmt(subtotal) }}</span></div>
       <div class="pd-row" v-if="discount > 0"><span>优惠券抵扣</span><span class="discount">-¥{{ fmt(discount) }}</span></div>
@@ -123,6 +144,10 @@ function fmt(n) { return Number(n).toFixed(2) }
 .ci-info { flex: 1; font-size: 13px; }
 .ci-p { color: #e1251b; margin-top: 4px; }
 .price-detail { background: #fff; margin: 8px 16px; border-radius: 8px; padding: 12px 16px; }
+.topup-hints { margin: 0 16px 8px; }
+.th-item { background: #fff8e6; color: #996600; font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; line-height: 18px; }
+.th-item b { color: #e1251b; }
+.th-go { color: #e1251b; font-weight: bold; }
 .pd-row { display: flex; justify-content: space-between; font-size: 13px; color: #666; padding: 4px 0; }
 .discount { color: #e1251b; }
 .coupon-picker { padding: 16px; }
