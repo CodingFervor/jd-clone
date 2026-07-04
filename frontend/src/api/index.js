@@ -152,4 +152,9 @@ export const checkRestock = (id) => http.get(`/products/${id}/restock`).then((r)
 export const subscribeRestock = (id) => http.post(`/products/${id}/restock`).then((r) => r.data)
 export const unsubscribeRestock = (id) => http.delete(`/products/${id}/restock`).then((r) => r.data)
 
+// ---- Product Q&A (商品问答) ----
+export const getProductQA = (id) => http.get(`/products/${id}/qa`).then((r) => r.data.data)
+export const askProductQA = (id, question) => http.post(`/products/${id}/qa`, { question }).then((r) => r.data.data)
+export const answerProductQA = (qaId, answer) => http.post(`/qa/${qaId}/answer`, { answer }).then((r) => r.data)
+
 export { errMsg }

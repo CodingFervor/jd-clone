@@ -132,7 +132,7 @@ func (r *ProductRepo) List(page, pageSize int, categoryID int64, keyword string)
 		pageSize = 20
 	}
 	offset := (page - 1) * pageSize
-	q := "SELECT id,name,subtitle,price,original_price,image,images,category,category_id,shop,stock,sales,description,tags,is_seckill,video_url,created_at FROM products " +
+	q := "SELECT id,name,subtitle,price,original_price,image,images,category,category_id,shop,stock,sales,description,tags,is_seckill,video_url,vip_price,created_at FROM products " +
 		where + " ORDER BY sales DESC, id DESC LIMIT ? OFFSET ?"
 	args = append(args, pageSize, offset)
 	rows, err := r.db.Query(q, args...)
@@ -155,7 +155,7 @@ func (r *ProductRepo) Seckill(limit int) ([]model.Product, error) {
 		limit = 6
 	}
 	rows, err := r.db.Query(
-		`SELECT id,name,subtitle,price,original_price,image,images,category,category_id,shop,stock,sales,description,tags,is_seckill,video_url,created_at
+		`SELECT id,name,subtitle,price,original_price,image,images,category,category_id,shop,stock,sales,description,tags,is_seckill,video_url,vip_price,created_at
 		 FROM products WHERE is_seckill=1 ORDER BY sales DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -174,7 +174,7 @@ func (r *ProductRepo) Seckill(limit int) ([]model.Product, error) {
 func (r *ProductRepo) Get(id int64) (*model.Product, error) {
 	p := &model.Product{}
 	row := r.db.QueryRow(
-		`SELECT id,name,subtitle,price,original_price,image,images,category,category_id,shop,stock,sales,description,tags,is_seckill,video_url,created_at
+		`SELECT id,name,subtitle,price,original_price,image,images,category,category_id,shop,stock,sales,description,tags,is_seckill,video_url,vip_price,created_at
 		 FROM products WHERE id=?`, id)
 	if err := scanProductRow(row, p); err != nil {
 		if err == sql.ErrNoRows {
@@ -212,12 +212,12 @@ func (r *ProductRepo) Delete(id int64) error {
 
 func scanProduct(rows *sql.Rows, p *model.Product) error {
 	return rows.Scan(&p.ID, &p.Name, &p.Subtitle, &p.Price, &p.OriginalPrice, &p.Image, &p.Images,
-		&p.Category, &p.CategoryID, &p.Shop, &p.Stock, &p.Sales, &p.Description, &p.Tags, &p.IsSeckill, &p.VideoURL, &p.CreatedAt)
+		&p.Category, &p.CategoryID, &p.Shop, &p.Stock, &p.Sales, &p.Description, &p.Tags, &p.IsSeckill, &p.VideoURL, &p.VipPrice, &p.CreatedAt)
 }
 
 func scanProductRow(row *sql.Row, p *model.Product) error {
 	return row.Scan(&p.ID, &p.Name, &p.Subtitle, &p.Price, &p.OriginalPrice, &p.Image, &p.Images,
-		&p.Category, &p.CategoryID, &p.Shop, &p.Stock, &p.Sales, &p.Description, &p.Tags, &p.IsSeckill, &p.VideoURL, &p.CreatedAt)
+		&p.Category, &p.CategoryID, &p.Shop, &p.Stock, &p.Sales, &p.Description, &p.Tags, &p.IsSeckill, &p.VideoURL, &p.VipPrice, &p.CreatedAt)
 }
 
 // ===================== Cart =====================
@@ -1433,6 +1433,59 @@ func (r *RestockRepo) IsSubscribed(userID, productID int64) bool {
 	var n int
 	_ = r.db.QueryRow(`SELECT 1 FROM restock_alerts WHERE user_id=? AND product_id=?`, userID, productID).Scan(&n)
 	return n == 1
+}
+
+// ===================== Product Q&A (商品问答) =====================
+
+type QARepo struct{ db *sql.DB }
+
+func NewQARepo(db *sql.DB) *QARepo { return &QARepo{db: db} }
+
+// ListByProduct returns Q&A entries for a product, newest first.
+func (r *QARepo) ListByProduct(productID int64) ([]model.ProductQA, error) {
+	rows, err := r.db.Query(
+		`SELECT id, product_id, user_id, username, question, answer, answerer, created_at
+		 FROM product_qa WHERE product_id=? ORDER BY id DESC`, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.ProductQA{}
+	for rows.Next() {
+		var qa model.ProductQA
+		if err := rows.Scan(&qa.ID, &qa.ProductID, &qa.UserID, &qa.Username, &qa.Question, &qa.Answer, &qa.Answerer, &qa.CreatedAt); err == nil {
+			out = append(out, qa)
+		}
+	}
+	return out, nil
+}
+
+// Ask records a buyer's question.
+func (r *QARepo) Ask(qa *model.ProductQA) error {
+	res, err := r.db.Exec(
+		`INSERT INTO product_qa (product_id, user_id, username, question) VALUES (?,?,?,?)`,
+		qa.ProductID, qa.UserID, qa.Username, qa.Question)
+	if err != nil {
+		return err
+	}
+	qa.ID, _ = res.LastInsertId()
+	return nil
+}
+
+// Answer records a seller's answer to a question.
+func (r *QARepo) Answer(id int64, answer, answerer string) error {
+	_, err := r.db.Exec(`UPDATE product_qa SET answer=?, answerer=? WHERE id=?`, answer, answerer, id)
+	return err
+}
+
+// SeedVIPPrices sets a VIP price (95% of regular) for the first few products if none set.
+func SeedVIPPrices(db *sql.DB) {
+	var n int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM products WHERE vip_price > 0`).Scan(&n)
+	if n > 0 {
+		return
+	}
+	_, _ = db.Exec(`UPDATE products SET vip_price = ROUND(price * 0.95, 2) WHERE vip_price = 0`)
 }
 
 // ===================== helpers =====================

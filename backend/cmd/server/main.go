@@ -80,6 +80,9 @@ func main() {
 	bundleRepo := repository.NewBundleRepo(db.DB)
 	bundleRepo.SeedBundles()
 	h.SetBundle(bundleRepo, repository.NewRestockRepo(db.DB))
+	// Attach the Q&A repo + seed VIP prices.
+	h.SetQA(repository.NewQARepo(db.DB))
+	repository.SeedVIPPrices(db.DB)
 
 	// Ensure the images directory exists for the static file server.
 	_ = os.MkdirAll("data/images", 0o755)

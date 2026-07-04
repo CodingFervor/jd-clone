@@ -40,6 +40,7 @@ type Handler struct {
 	ShopRating   *repository.ShopRatingRepo
 	Bundle       *repository.BundleRepo
 	Restock      *repository.RestockRepo
+	QA           *repository.QARepo
 	jwtKey       []byte
 }
 
@@ -89,6 +90,11 @@ func (h *Handler) SetShopRating(sr *repository.ShopRatingRepo) {
 func (h *Handler) SetBundle(b *repository.BundleRepo, r *repository.RestockRepo) {
 	h.Bundle = b
 	h.Restock = r
+}
+
+// SetQA attaches the product-Q&A repo.
+func (h *Handler) SetQA(qa *repository.QARepo) {
+	h.QA = qa
 }
 
 // ---- JWT (HS256, hand-rolled, no external dep) ----

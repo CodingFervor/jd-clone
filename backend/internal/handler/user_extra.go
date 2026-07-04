@@ -541,3 +541,85 @@ func (h *Handler) CheckRestock(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"subscribed": h.Restock.IsSubscribed(uid, pid)})
 }
+
+// ===================== Product Q&A (商品问答) =====================
+
+// ListQA: GET /products/:id/qa (public)
+func (h *Handler) ListQA(c *gin.Context) {
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的商品ID"})
+		return
+	}
+	list, err := h.QA.ListByProduct(pid)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"data": []any{}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list})
+}
+
+// AskQA: POST /products/:id/qa (requires auth)
+func (h *Handler) AskQA(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的商品ID"})
+		return
+	}
+	var req struct {
+		Question string `json:"question" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "问题不能为空"})
+		return
+	}
+	u, _ := h.User.Get(uid)
+	name := ""
+	if u != nil {
+		name = u.Nickname
+		if name == "" {
+			name = u.Username
+		}
+	}
+	qa := &model.ProductQA{ProductID: pid, UserID: uid, Username: name, Question: req.Question}
+	if err := h.QA.Ask(qa); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "提问失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": qa})
+}
+
+// AnswerQA: POST /qa/:id/answer (requires auth) — seller answers a question.
+func (h *Handler) AnswerQA(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	_ = uid
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		return
+	}
+	var req struct {
+		Answer string `json:"answer" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "回答不能为空"})
+		return
+	}
+	u, _ := h.User.Get(uid)
+	name := "商家客服"
+	if u != nil && u.Nickname != "" {
+		name = u.Nickname
+	}
+	if err := h.QA.Answer(id, req.Answer, name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "回答失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "已回答"})
+}

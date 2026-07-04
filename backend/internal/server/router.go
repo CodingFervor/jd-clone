@@ -34,6 +34,7 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		api.GET("/products/:id/skus", h.ListSKUs)
 		api.GET("/products/:id/price-history", h.ListPriceHistory)
 		api.GET("/products/:id/restock", h.CheckRestock)
+		api.GET("/products/:id/qa", h.ListQA)
 
 		// Public bundles + shop ratings
 		api.GET("/bundles", h.ListBundles)
@@ -67,6 +68,10 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			// Restock alerts (到货通知)
 			auth.POST("/products/:id/restock", h.SubscribeRestock)
 			auth.DELETE("/products/:id/restock", h.UnsubscribeRestock)
+
+			// Product Q&A (商品问答)
+			auth.POST("/products/:id/qa", h.AskQA)
+			auth.POST("/qa/:id/answer", h.AnswerQA)
 
 			auth.GET("/cart", h.ListCart)
 			auth.POST("/cart", h.AddCart)

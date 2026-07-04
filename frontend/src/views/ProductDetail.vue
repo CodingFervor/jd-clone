@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +17,10 @@ const priceStats = ref(null)
 const showPriceHistory = ref(false)
 const showPoster = ref(false)
 const restockSubscribed = ref(false)
+// Product Q&A
+const qaList = ref([])
+const showQA = ref(false)
+const qaQuestion = ref('')
 const loading = ref(true)
 const showReview = ref(false)
 const reviewRating = ref(5)
@@ -63,6 +67,8 @@ onMounted(async () => {
     if (localStorage.getItem('jd_token')) {
       checkRestock(route.params.id).then((s) => { restockSubscribed.value = s }).catch(() => {})
     }
+    // Load Q&A.
+    getProductQA(route.params.id).then((d) => { qaList.value = d || [] }).catch(() => {})
   } catch (e) {
     showToast('商品不存在')
   } finally {
@@ -185,6 +191,17 @@ async function toggleRestock() {
     showToast('操作失败')
   }
 }
+async function submitQA() {
+  if (!qaQuestion.value.trim()) { showToast('请输入问题'); return }
+  if (!checkLogin()) return
+  try {
+    const qa = await askProductQA(product.value.id, qaQuestion.value)
+    qaList.value.unshift(qa)
+    showQA.value = false
+    qaQuestion.value = ''
+    showSuccessToast('提问成功')
+  } catch (e) { showToast('请先登录') }
+}
 // Map price-history points to bar heights (0-100%) relative to the range.
 function priceBars() {
   if (!priceHistory.value.length) return []
@@ -226,6 +243,9 @@ function priceTrend() {
     <div class="price-block">
       <span class="big-price">¥{{ fmt(currentPrice()) }}</span>
       <span class="origin">¥{{ fmt(product.original_price) }}</span>
+      <span v-if="product.vip_price > 0 && product.vip_price < currentPrice()" class="vip-price">
+        <van-icon name="diamond-o" /> PLUS会员 ¥{{ fmt(product.vip_price) }}
+      </span>
     </div>
     <!-- SKU spec selector -->
     <div v-if="skus.length" class="sku-block">
@@ -279,6 +299,28 @@ function priceTrend() {
       <h3>商品详情</h3>
       <p>{{ product.description }}</p>
     </div>
+    <!-- Product Q&A (商品问答) -->
+    <div class="qa-section">
+      <div class="rev-head">
+        <span>商品问答 ({{ qaList.length }})</span>
+        <van-button size="mini" type="danger" plain @click="showQA = true">提问</van-button>
+      </div>
+      <div v-if="!qaList.length" class="qa-empty">暂无问答</div>
+      <div v-for="qa in qaList.slice(0, 5)" :key="qa.id" class="qa-item">
+        <div class="qa-q"><span class="qa-tag-q">问</span> {{ qa.question }}</div>
+        <div v-if="qa.answer" class="qa-a"><span class="qa-tag-a">答</span> {{ qa.answer }} <small class="qa-answerer">{{ qa.answerer }}</small></div>
+      </div>
+    </div>
+
+    <!-- Q&A popup -->
+    <van-popup v-model:show="showQA" position="bottom" round closeable>
+      <div class="qa-form">
+        <h3>我要提问</h3>
+        <van-field v-model="qaQuestion" type="textarea" placeholder="说说你想了解的问题" rows="3" />
+        <van-button type="danger" block @click="submitQA" style="margin-top:12px">提交问题</van-button>
+      </div>
+    </van-popup>
+
     <div class="reviews">
       <div class="rev-head">
         <span>商品评价 ({{ reviews.length }})</span>
@@ -366,6 +408,18 @@ function priceTrend() {
 .product-video { background: #000; width: 100%; }
 .pv-player { width: 100%; max-height: 280px; object-fit: contain; display: block; }
 .price-block { padding: 12px 16px; background: #fff; }
+.vip-price { margin-left: 12px; color: #333; font-size: 13px; background: linear-gradient(90deg, #ffd700, #ffaa00); padding: 2px 10px; border-radius: 12px; }
+.qa-section { background: #fff; margin-top: 8px; padding: 12px 16px; }
+.qa-empty { color: #999; font-size: 13px; padding: 12px 0; }
+.qa-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
+.qa-q { font-size: 14px; line-height: 20px; }
+.qa-tag-q { background: #e1251b; color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-right: 6px; }
+.qa-a { font-size: 13px; color: #666; margin-top: 6px; line-height: 18px; }
+.qa-tag-a { background: #07c160; color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-right: 6px; }
+.qa-answerer { color: #999; margin-left: 6px; }
+.qa-form { padding: 20px; }
+.qa-form h3 { text-align: center; margin-bottom: 16px; }
+.qa-form .van-field { border: 1px solid #eee; }
 .big-price { color: #e1251b; font-size: 28px; font-weight: bold; }
 .origin { color: #999; text-decoration: line-through; margin-left: 10px; font-size: 14px; }
 .sku-block { padding: 12px 16px; background: #fff; border-top: 1px solid #f5f5f5; }
