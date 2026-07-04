@@ -113,7 +113,7 @@ function fmt(n) { return Number(n).toFixed(2) }
       <div class="pd-row"><span>商品总额</span><span>¥{{ fmt(subtotal) }}</span></div>
       <div class="pd-row" v-if="discount > 0"><span>优惠券抵扣</span><span class="discount">-¥{{ fmt(discount) }}</span></div>
     </div>
-    <van-submit-bar :price="finalTotal * 100" button-text="提交订单" @submit="submit" />
+    <van-submit-bar :price="finalTotal * 100" :button-text="'提交订单 (' + items.length + '件)'" @submit="submit" />
 
     <van-popup v-model:show="showCouponPicker" position="bottom" round>
       <div class="coupon-picker">

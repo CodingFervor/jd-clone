@@ -58,7 +58,8 @@ func (h *Handler) GetProduct(c *gin.Context) {
 			_ = h.History.RecordView(uid, id)
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"data": p, "reviews": reviews, "skus": skus, "recommended_sku": recommended})
+	related, _ := h.Product.Related(id, 6)
+	c.JSON(http.StatusOK, gin.H{"data": p, "reviews": reviews, "skus": skus, "recommended_sku": recommended, "related": related})
 }
 
 func (h *Handler) ListSeckill(c *gin.Context) {

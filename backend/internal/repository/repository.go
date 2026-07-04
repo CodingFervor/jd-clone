@@ -185,6 +185,34 @@ func (r *ProductRepo) Get(id int64) (*model.Product, error) {
 	return p, nil
 }
 
+// Related returns products in the same category (or sharing tags) as the given
+// product, excluding itself. Used for "看了又看" recommendations.
+func (r *ProductRepo) Related(id int64, limit int) ([]model.Product, error) {
+	if limit <= 0 {
+		limit = 6
+	}
+	// First get the source product to know its category/tags.
+	src, err := r.Get(id)
+	if err != nil || src == nil {
+		return nil, nil
+	}
+	rows, err := r.db.Query(
+		`SELECT id,name,subtitle,price,original_price,image,images,category,category_id,shop,stock,sales,description,tags,is_seckill,video_url,vip_price,created_at
+		 FROM products WHERE id != ? AND category_id=? ORDER BY sales DESC LIMIT ?`, id, src.CategoryID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.Product{}
+	for rows.Next() {
+		var p model.Product
+		if err := scanProduct(rows, &p); err == nil {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
 func (r *ProductRepo) Create(p *model.ProductInput) (int64, error) {
 	res, err := r.db.Exec(
 		`INSERT INTO products (name,subtitle,price,original_price,image,images,category,category_id,shop,stock,sales,description,tags,is_seckill)
