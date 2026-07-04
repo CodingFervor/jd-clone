@@ -1310,6 +1310,131 @@ func clampScore(n int) int {
 	return n
 }
 
+// ===================== Bundles (组合套餐) =====================
+
+type BundleRepo struct{ db *sql.DB }
+
+func NewBundleRepo(db *sql.DB) *BundleRepo { return &BundleRepo{db: db} }
+
+// List returns all bundles with their member products joined.
+func (r *BundleRepo) List() ([]model.Bundle, error) {
+	rows, err := r.db.Query(`SELECT id, title, bundle_price, original_total, product_ids FROM bundles ORDER BY sort_order, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.Bundle{}
+	for rows.Next() {
+		var b model.Bundle
+		if err := rows.Scan(&b.ID, &b.Title, &b.BundlePrice, &b.OriginalTotal, &b.ProductIDs); err == nil {
+			b.Products = r.loadProducts(b.ProductIDs)
+			out = append(out, b)
+		}
+	}
+	return out, nil
+}
+
+func (r *BundleRepo) loadProducts(idsCSV string) []model.BundleItem {
+	out := []model.BundleItem{}
+	for _, idStr := range splitCSV(idsCSV) {
+		var id int64
+		if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil || id == 0 {
+			continue
+		}
+		var item model.BundleItem
+		if err := r.db.QueryRow(`SELECT id, name, image, price FROM products WHERE id=?`, id).
+			Scan(&item.ID, &item.Name, &item.Image, &item.Price); err == nil {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func splitCSV(s string) []string {
+	parts := []string{}
+	cur := ""
+	for _, c := range s {
+		if c == ',' {
+			if cur != "" {
+				parts = append(parts, cur)
+			}
+			cur = ""
+		} else {
+			cur += string(c)
+		}
+	}
+	if cur != "" {
+		parts = append(parts, cur)
+	}
+	return parts
+}
+
+// SeedBundles populates demo bundle deals if none exist.
+func (r *BundleRepo) SeedBundles() {
+	var n int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM bundles`).Scan(&n)
+	if n > 0 {
+		return
+	}
+	rows, err := r.db.Query(`SELECT id, price FROM products ORDER BY id LIMIT 10`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	type pp struct {
+		id    int64
+		price float64
+	}
+	items := []pp{}
+	for rows.Next() {
+		var p pp
+		if rows.Scan(&p.id, &p.price) == nil {
+			items = append(items, p)
+		}
+	}
+	// Group into bundles of 3.
+	for i := 0; i+3 <= len(items); i += 3 {
+		grp := items[i : i+3]
+		total := 0.0
+		ids := ""
+		for j, p := range grp {
+			total += p.price
+			if j > 0 {
+				ids += ","
+			}
+			ids += fmt.Sprintf("%d", p.id)
+		}
+		_, _ = r.db.Exec(
+			`INSERT INTO bundles (title, bundle_price, original_total, product_ids, sort_order) VALUES (?,?,?,?,?)`,
+			fmt.Sprintf("超值%d件套", len(grp)), total*0.85, total, ids, i/3)
+	}
+}
+
+// ===================== Restock alerts (到货通知) =====================
+
+type RestockRepo struct{ db *sql.DB }
+
+func NewRestockRepo(db *sql.DB) *RestockRepo { return &RestockRepo{db: db} }
+
+// Subscribe records a user's restock subscription (idempotent via UNIQUE).
+func (r *RestockRepo) Subscribe(userID, productID int64) error {
+	_, err := r.db.Exec(`INSERT OR IGNORE INTO restock_alerts (user_id, product_id) VALUES (?,?)`, userID, productID)
+	return err
+}
+
+// Unsubscribe removes a subscription.
+func (r *RestockRepo) Unsubscribe(userID, productID int64) error {
+	_, err := r.db.Exec(`DELETE FROM restock_alerts WHERE user_id=? AND product_id=?`, userID, productID)
+	return err
+}
+
+// IsSubscribed reports whether a user is subscribed.
+func (r *RestockRepo) IsSubscribed(userID, productID int64) bool {
+	var n int
+	_ = r.db.QueryRow(`SELECT 1 FROM restock_alerts WHERE user_id=? AND product_id=?`, userID, productID).Scan(&n)
+	return n == 1
+}
+
 // ===================== helpers =====================
 
 func defaultStr(s, d string) string {

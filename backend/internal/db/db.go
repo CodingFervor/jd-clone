@@ -348,6 +348,25 @@ func createTables() error {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_shop_ratings_shop ON shop_ratings(shop)`,
+		// Bundle deals: a set of products sold together at a discount (组合套餐).
+		`CREATE TABLE IF NOT EXISTS bundles (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL,
+			bundle_price REAL NOT NULL DEFAULT 0,
+			original_total REAL NOT NULL DEFAULT 0,
+			product_ids TEXT NOT NULL DEFAULT '',
+			sort_order INTEGER NOT NULL DEFAULT 0
+		)`,
+		// Restock alerts: users who want to be notified when a product is back in stock (到货通知).
+		`CREATE TABLE IF NOT EXISTS restock_alerts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			product_id INTEGER NOT NULL,
+			notified INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, product_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_restock_product ON restock_alerts(product_id)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.

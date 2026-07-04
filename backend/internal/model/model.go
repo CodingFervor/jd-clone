@@ -249,6 +249,32 @@ type PresaleOrder struct {
 	ProductName string  `json:"product_name"`
 }
 
+// Bundle is a set of products sold together at a discounted price (组合套餐).
+type Bundle struct {
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	BundlePrice   float64      `json:"bundle_price"`
+	OriginalTotal float64      `json:"original_total"`
+	ProductIDs    string       `json:"product_ids"` // comma-separated
+	Products      []BundleItem `json:"products"`    // joined
+}
+
+// BundleItem is a product within a bundle.
+type BundleItem struct {
+	ID    int64   `json:"id"`
+	Name  string  `json:"name"`
+	Image string  `json:"image"`
+	Price float64 `json:"price"`
+}
+
+// RestockAlert is a user's subscription to be notified when a product is back in stock.
+type RestockAlert struct {
+	ID        int64 `json:"id"`
+	UserID    int64 `json:"user_id"`
+	ProductID int64 `json:"product_id"`
+	Notified  int   `json:"notified"`
+}
+
 // SKU is a specific spec combination (color/size/version) of a product.
 type SKU struct {
 	ID        int64   `json:"id"`

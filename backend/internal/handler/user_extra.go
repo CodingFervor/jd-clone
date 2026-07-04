@@ -480,3 +480,64 @@ func (h *Handler) CreateShopRating(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": s})
 }
+
+// ===================== Bundles (组合套餐) =====================
+
+// ListBundles: GET /bundles (public)
+func (h *Handler) ListBundles(c *gin.Context) {
+	list, err := h.Bundle.List()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list})
+}
+
+// ===================== Restock alerts (到货通知) =====================
+
+// SubscribeRestock: POST /products/:id/restock (requires auth)
+func (h *Handler) SubscribeRestock(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的商品ID"})
+		return
+	}
+	if err := h.Restock.Subscribe(uid, pid); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "订阅失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "到货通知已开启"})
+}
+
+// UnsubscribeRestock: DELETE /products/:id/restock (requires auth)
+func (h *Handler) UnsubscribeRestock(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的商品ID"})
+		return
+	}
+	_ = h.Restock.Unsubscribe(uid, pid)
+	c.JSON(http.StatusOK, gin.H{"message": "已取消通知"})
+}
+
+// CheckRestock: GET /products/:id/restock (auth-optional)
+func (h *Handler) CheckRestock(c *gin.Context) {
+	uid, ok := h.currentUserID(c, true)
+	if !ok {
+		return
+	}
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"subscribed": false})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"subscribed": h.Restock.IsSubscribed(uid, pid)})
+}

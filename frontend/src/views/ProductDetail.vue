@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +16,7 @@ const priceHistory = ref([])
 const priceStats = ref(null)
 const showPriceHistory = ref(false)
 const showPoster = ref(false)
+const restockSubscribed = ref(false)
 const loading = ref(true)
 const showReview = ref(false)
 const reviewRating = ref(5)
@@ -58,6 +59,10 @@ onMounted(async () => {
     }
     // Load price history (best-effort).
     getPriceHistory(route.params.id).then((d) => { priceHistory.value = d.data || []; priceStats.value = d.stats }).catch(() => {})
+    // Check restock subscription.
+    if (localStorage.getItem('jd_token')) {
+      checkRestock(route.params.id).then((s) => { restockSubscribed.value = s }).catch(() => {})
+    }
   } catch (e) {
     showToast('商品不存在')
   } finally {
@@ -164,6 +169,22 @@ async function copyShareLink() {
     showToast('复制失败，请手动复制')
   }
 }
+async function toggleRestock() {
+  if (!checkLogin()) return
+  try {
+    if (restockSubscribed.value) {
+      await unsubscribeRestock(product.value.id)
+      restockSubscribed.value = false
+      showSuccessToast('已取消到货通知')
+    } else {
+      await subscribeRestock(product.value.id)
+      restockSubscribed.value = true
+      showSuccessToast('到货后将通知您')
+    }
+  } catch (e) {
+    showToast('操作失败')
+  }
+}
 // Map price-history points to bar heights (0-100%) relative to the range.
 function priceBars() {
   if (!priceHistory.value.length) return []
@@ -230,6 +251,11 @@ function priceTrend() {
       <van-cell title="店铺" :value="product.shop" is-link @click="router.push('/shop/' + encodeURIComponent(product.shop))" />
       <van-cell title="销量" :value="product.sales + '人付款'" />
       <van-cell title="标签" :value="product.tags || '京东自营'" />
+      <van-cell :title="restockSubscribed ? '到货通知已开启' : '到货通知'" is-link @click="toggleRestock">
+        <template #right-icon>
+          <van-switch :model-value="restockSubscribed" size="20" @click.stop="toggleRestock" active-color="#e1251b" />
+        </template>
+      </van-cell>
     </van-cell-group>
     <!-- Price history (比价历史) -->
     <div v-if="priceHistory.length" class="price-history">
