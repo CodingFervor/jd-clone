@@ -2,13 +2,26 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getCart, updateCart, deleteCart, createOrder } from '../api'
+import { getCart, updateCart, deleteCart, createOrder, getProducts, addToCart } from '../api'
 
 const router = useRouter()
 const items = ref([])
 const selectedTotal = ref(0)
 const allSelected = ref(true)
 const loading = ref(true)
+// "猜你喜欢" recommended products, fetched as best-sellers from catalog.
+const recommendations = ref([])
+
+async function loadRecommendations() {
+  try {
+    const res = await getProducts({ page: 1, page_size: 4 })
+    // Support both { data: { data, list } } and { data: [...] } shapes.
+    const list = res.data?.data || res.data?.list || res.data || []
+    recommendations.value = (Array.isArray(list) ? list : []).slice(0, 4)
+  } catch (e) {
+    recommendations.value = []
+  }
+}
 
 async function load() {
   loading.value = true
@@ -17,6 +30,9 @@ async function load() {
     items.value = res.data || []
     selectedTotal.value = res.selected_total || 0
     allSelected.value = items.value.length > 0 && items.value.every((i) => i.selected === 1)
+    // Load recommendations after the cart is loaded so the "猜你喜欢" section
+    // is populated while / above the cart items.
+    await loadRecommendations()
   } catch (e) {
     if (e.response?.status === 401) router.replace('/login')
   } finally {
@@ -25,6 +41,16 @@ async function load() {
 }
 onMounted(load)
 onActivated(load)
+
+async function quickAdd(p) {
+  try {
+    await addToCart(p.id, 1)
+    showSuccessToast('已加入购物车')
+    await load()
+  } catch (e) {
+    showToast(e.response?.data?.error || '加入失败')
+  }
+}
 
 async function toggleSelect(item) {
   const newSel = item.selected === 1 ? 0 : 1
@@ -89,6 +115,37 @@ function isPriceDrop(it) {
       <van-button type="danger" round @click="router.push('/home')">去逛逛</van-button>
     </van-empty>
     <div v-else>
+      <!-- 猜你喜欢: horizontally scrollable recommended products -->
+      <div v-if="recommendations.length" class="rec-section">
+        <div class="rec-title">猜你喜欢</div>
+        <div class="rec-scroll">
+          <div
+            v-for="p in recommendations"
+            :key="p.id"
+            class="rec-card"
+            @click="router.push('/product/' + p.id)"
+          >
+            <van-image
+              width="100"
+              height="100"
+              radius="6"
+              :src="p.image"
+              fit="cover"
+            />
+            <div class="rec-name van-multi-ellipsis--l2">{{ p.name }}</div>
+            <div class="rec-bottom">
+              <span class="rec-price">¥{{ fmt(p.price) }}</span>
+              <van-button
+                size="mini"
+                type="danger"
+                round
+                @click.stop="quickAdd(p)"
+              >加入购物车</van-button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-for="it in items" :key="it.id" class="cart-item">
           <van-checkbox :model-value="it.selected === 1" @click="toggleSelect(it)" />
           <van-image width="80" height="80" radius="6" :src="it.product_image" fit="cover" @click="router.push('/product/' + it.product_id)" />
@@ -121,4 +178,13 @@ function isPriceDrop(it) {
 .ci-name .drop-tag { vertical-align: middle; margin-right: 4px; }
 .ci-bottom { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .ci-bottom .price { font-size: 16px; flex: 1; }
+/* 猜你喜欢 recommended products section */
+.rec-section { background: #fff; margin-bottom: 8px; padding: 12px 12px 8px; }
+.rec-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.rec-scroll { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.rec-scroll::-webkit-scrollbar { display: none; }
+.rec-card { flex: 0 0 auto; width: 110px; }
+.rec-name { font-size: 12px; line-height: 16px; height: 32px; margin-top: 6px; }
+.rec-bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px; }
+.rec-price { color: #e1251b; font-size: 14px; font-weight: 600; }
 </style>

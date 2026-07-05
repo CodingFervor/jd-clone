@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder } from '../api'
@@ -8,15 +8,55 @@ const router = useRouter()
 const orders = ref([])
 const loading = ref(true)
 
+// Order timeout countdown: pending orders expire 30 minutes after creation.
+const TIMEOUT_MS = 30 * 60 * 1000
+// Reactive "now" tick; updated every second to drive the countdowns.
+const now = ref(Date.now())
+let timer = null
+
+function startTimer() {
+  stopTimer()
+  timer = setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
+}
+function stopTimer() {
+  if (timer) {
+    clearInterval(timer)
+    timer = null
+  }
+}
+
 onMounted(async () => {
   try {
     orders.value = await getOrders()
+    if (orders.value.some((o) => o.status === 'pending')) {
+      startTimer()
+    }
   } catch (e) {
     showToast('加载失败')
   } finally {
     loading.value = false
   }
 })
+onUnmounted(stopTimer)
+
+// Calculate remaining milliseconds for a pending order.
+function remainingMs(o) {
+  const created = new Date(o.created_at).getTime()
+  if (Number.isNaN(created)) return 0
+  const deadline = created + TIMEOUT_MS
+  return Math.max(0, deadline - now.value)
+}
+// Format the remaining time as MM:SS, or "已超时" when expired.
+function countdownText(o) {
+  const ms = remainingMs(o)
+  if (ms <= 0) return '已超时'
+  const totalSec = Math.floor(ms / 1000)
+  const m = String(Math.floor(totalSec / 60)).padStart(2, '0')
+  const s = String(totalSec % 60).padStart(2, '0')
+  return `剩余 ${m}:${s}`
+}
 
 async function pay(o) {
   // Navigate to the sandbox payment cashier.
@@ -77,7 +117,10 @@ function parseItems(json) {
       <div v-for="o in orders" :key="o.id" class="order-card">
         <div class="o-head">
           <span class="o-no">订单号: {{ o.order_no }}</span>
-          <span class="o-status">{{ statusText(o.status) }}</span>
+          <span class="o-status">
+            {{ statusText(o.status) }}
+            <span v-if="o.status === 'pending'" class="o-countdown">（{{ countdownText(o) }}）</span>
+          </span>
         </div>
         <div v-for="(it, i) in parseItems(o.items_json)" :key="i" class="o-item">
           <van-image width="60" height="60" radius="6" :src="it.image" fit="cover" />
@@ -107,6 +150,7 @@ function parseItems(json) {
 .order-card { background: #fff; margin: 8px; border-radius: 8px; padding: 12px; }
 .o-head { display: flex; justify-content: space-between; font-size: 12px; color: #999; margin-bottom: 8px; }
 .o-status { color: #e1251b; }
+.o-countdown { color: #e1251b; font-weight: 600; }
 .o-item { display: flex; gap: 10px; padding: 6px 0; }
 .oi-info { flex: 1; }
 .oi-name { font-size: 13px; }
