@@ -41,6 +41,7 @@ type Handler struct {
 	Bundle       *repository.BundleRepo
 	Restock      *repository.RestockRepo
 	QA           *repository.QARepo
+	Invoice      *repository.InvoiceRepo
 	jwtKey       []byte
 }
 
@@ -95,6 +96,11 @@ func (h *Handler) SetBundle(b *repository.BundleRepo, r *repository.RestockRepo)
 // SetQA attaches the product-Q&A repo.
 func (h *Handler) SetQA(qa *repository.QARepo) {
 	h.QA = qa
+}
+
+// SetInvoice attaches the invoice repo.
+func (h *Handler) SetInvoice(inv *repository.InvoiceRepo) {
+	h.Invoice = inv
 }
 
 // ---- JWT (HS256, hand-rolled, no external dep) ----

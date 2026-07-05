@@ -129,6 +129,10 @@ export const replyReview = (reviewId, content) => http.post('/reviews/reply', { 
 // ---- Review useful vote (评价有用) ----
 export const markReviewUseful = (id) => http.post(`/reviews/${id}/useful`).then((r) => r.data)
 
+// ---- Order invoices (电子发票) ----
+export const getInvoice = (orderId) => http.get(`/orders/${orderId}/invoice`).then((r) => r.data.data)
+export const requestInvoice = (orderId, payload) => http.post(`/orders/${orderId}/invoice`, payload).then((r) => r.data)
+
 // ---- Seckill deals (秒杀) ----
 export const getSeckillDeals = () => http.get('/seckill').then((r) => r.data.data)
 export const grabSeckill = (id) => http.post(`/seckill/${id}/grab`).then((r) => r.data)

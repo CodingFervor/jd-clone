@@ -351,6 +351,61 @@ func (h *Handler) MarkReviewUseful(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "已标记有用"})
 }
 
+// ===================== Order invoices (电子发票) =====================
+
+// RequestInvoice: POST /orders/:id/invoice — request an electronic invoice (requires auth).
+func (h *Handler) RequestInvoice(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的订单ID"})
+		return
+	}
+	var req struct {
+		InvoiceType string `json:"invoice_type"`
+		Title       string `json:"title" binding:"required"`
+		TaxNo       string `json:"tax_no"`
+		Email       string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请填写发票抬头"})
+		return
+	}
+	// Check if invoice already exists.
+	if existing, _ := h.Invoice.GetByOrder(orderID, uid); existing != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "该订单已开具发票"})
+		return
+	}
+	inv := &model.OrderInvoice{OrderID: orderID, UserID: uid, InvoiceType: req.InvoiceType, Title: req.Title, TaxNo: req.TaxNo, Email: req.Email}
+	if err := h.Invoice.Create(inv); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "开具失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": inv, "message": "发票已开具"})
+}
+
+// GetInvoice: GET /orders/:id/invoice — get the invoice for an order (requires auth).
+func (h *Handler) GetInvoice(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的订单ID"})
+		return
+	}
+	inv, err := h.Invoice.GetByOrder(orderID, uid)
+	if err != nil || inv == nil {
+		c.JSON(http.StatusOK, gin.H{"data": nil})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": inv})
+}
+
 // ===================== Seckill deals (秒杀活动) =====================
 
 // ListSeckillDeals: GET /seckill (public)

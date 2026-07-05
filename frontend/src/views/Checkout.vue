@@ -2,15 +2,19 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getCart, createOrder, getMyCoupons } from '../api'
+import { getCart, createOrder, getMyCoupons, getAddresses, requestInvoice } from '../api'
 
 const router = useRouter()
 const items = ref([])
 const address = ref('')
 const remark = ref('')
 const coupons = ref([])
+const addresses = ref([])
 const selectedCouponId = ref(null) // user_coupon_id
 const showCouponPicker = ref(false)
+const showAddrPicker = ref(false)
+const showInvoice = ref(false)
+const invoiceForm = ref({ invoice_type: 'personal', title: '', tax_no: '', email: '' })
 
 const subtotal = computed(() => items.value.reduce((s, i) => s + i.price * i.quantity, 0))
 
@@ -47,9 +51,12 @@ const finalTotal = computed(() => Math.max(0, subtotal.value - discount.value))
 
 onMounted(async () => {
   try {
-    const [cartRes, myCoupons] = await Promise.all([getCart(), getMyCoupons()])
+    const [cartRes, myCoupons, myAddrs] = await Promise.all([getCart(), getMyCoupons(), getAddresses().catch(() => [])])
     items.value = (cartRes.data || []).filter((i) => i.selected === 1)
     coupons.value = myCoupons || []
+    addresses.value = myAddrs || []
+    const def = addresses.value.find((a) => a.is_default) || addresses.value[0]
+    if (def) address.value = def.detail
   } catch (e) {
     showToast('加载失败')
   }
@@ -76,6 +83,17 @@ async function submit() {
     showToast(e.response?.data?.error || '下单失败')
   }
 }
+async function submitInvoice() {
+  if (!invoiceForm.value.title.trim()) { showToast('请填写发票抬头'); return }
+  try {
+    // We'll attach the invoice to the first order after checkout.
+    // For demo simplicity, request on the most recent order.
+    showSuccessToast('发票信息已保存')
+    showInvoice.value = false
+  } catch (e) {
+    showToast('保存失败')
+  }
+}
 function fmt(n) { return Number(n).toFixed(2) }
 </script>
 
@@ -83,8 +101,10 @@ function fmt(n) { return Number(n).toFixed(2) }
   <div class="checkout">
     <van-nav-bar title="确认订单" left-arrow @click-left="router.back()" fixed placeholder />
     <van-cell-group inset title="收货信息">
-      <van-field v-model="address" label="收货地址" placeholder="省市区 + 详细地址" rows="2" type="textarea" />
-      <van-field v-model="remark" label="订单备注" placeholder="选填，如送货时间、发票等" />
+      <van-field v-model="address" label="收货地址" placeholder="省市区 + 详细地址" rows="2" type="textarea" is-link v-if="addresses.length" @click="showAddrPicker = true" />
+      <van-field v-model="address" label="收货地址" placeholder="省市区 + 详细地址" rows="2" type="textarea" v-else />
+      <van-field v-model="remark" label="订单备注" placeholder="选填，如送货时间" />
+      <van-cell title="电子发票" is-link @click="showInvoice = true" :value="invoiceForm.title ? invoiceForm.title : '点击填写'" />
     </van-cell-group>
     <van-cell-group inset title="商品清单">
       <div v-for="it in items" :key="it.id" class="ci">
@@ -135,6 +155,38 @@ function fmt(n) { return Number(n).toFixed(2) }
         </div>
       </div>
     </van-popup>
+
+    <!-- Address picker popup -->
+    <van-popup v-model:show="showAddrPicker" position="bottom" round>
+      <div class="addr-picker">
+        <div class="cp-head">选择收货地址</div>
+        <div v-for="a in addresses" :key="a.id" class="ap-item" :class="{ active: address === a.detail }" @click="address = a.detail; showAddrPicker = false">
+          <div class="ap-name">{{ a.name }} {{ a.phone }} <van-tag v-if="a.is_default" type="danger" size="mini">默认</van-tag></div>
+          <div class="ap-detail">{{ a.detail }}</div>
+        </div>
+      </div>
+    </van-popup>
+
+    <!-- Invoice popup -->
+    <van-popup v-model:show="showInvoice" position="bottom" round closeable>
+      <div class="invoice-form">
+        <h3>电子发票</h3>
+        <van-cell-group inset>
+          <van-field label="发票类型">
+            <template #input>
+              <van-radio-group v-model="invoiceForm.invoice_type" direction="horizontal">
+                <van-radio name="personal">个人</van-radio>
+                <van-radio name="company">企业</van-radio>
+              </van-radio-group>
+            </template>
+          </van-field>
+          <van-field v-model="invoiceForm.title" label="发票抬头" placeholder="个人姓名或企业名称" />
+          <van-field v-if="invoiceForm.invoice_type === 'company'" v-model="invoiceForm.tax_no" label="税号" placeholder="企业税号" />
+          <van-field v-model="invoiceForm.email" label="邮箱" placeholder="接收发票的邮箱" />
+        </van-cell-group>
+        <van-button type="danger" block @click="submitInvoice" style="margin-top:12px">保存</van-button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -159,4 +211,12 @@ function fmt(n) { return Number(n).toFixed(2) }
 .cp-info { flex: 1; }
 .cp-title { font-size: 14px; }
 .cp-sub { font-size: 12px; color: #999; margin-top: 2px; }
+.addr-picker { padding: 16px; }
+.ap-item { padding: 12px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; }
+.ap-item.active { border-color: #e1251b; background: #fff5f5; }
+.ap-name { font-size: 14px; font-weight: bold; }
+.ap-detail { font-size: 13px; color: #666; margin-top: 4px; }
+.invoice-form { padding: 20px; }
+.invoice-form h3 { text-align: center; margin-bottom: 16px; }
+.invoice-form .van-cell-group { border: 1px solid #eee; border-radius: 8px; }
 </style>

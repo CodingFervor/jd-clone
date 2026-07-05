@@ -140,6 +140,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			auth.POST("/orders/:id/confirm", h.ConfirmOrder)
 			// Cancel order (取消订单)
 			auth.POST("/orders/:id/cancel", h.CancelOrder)
+			// Order invoices (电子发票)
+			auth.GET("/orders/:id/invoice", h.GetInvoice)
+			auth.POST("/orders/:id/invoice", h.RequestInvoice)
 
 			// After-sale refunds
 			auth.POST("/refunds", h.CreateRefund)

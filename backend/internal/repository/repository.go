@@ -1527,6 +1527,34 @@ func (r *QARepo) Answer(id int64, answer, answerer string) error {
 	return err
 }
 
+// ===================== Order invoices (电子发票) =====================
+
+type InvoiceRepo struct{ db *sql.DB }
+
+func NewInvoiceRepo(db *sql.DB) *InvoiceRepo { return &InvoiceRepo{db: db} }
+
+func (r *InvoiceRepo) Create(inv *model.OrderInvoice) error {
+	res, err := r.db.Exec(
+		`INSERT INTO order_invoices (order_id, user_id, invoice_type, title, tax_no, email) VALUES (?,?,?,?,?,?)`,
+		inv.OrderID, inv.UserID, defaultStr(inv.InvoiceType, "personal"), inv.Title, inv.TaxNo, inv.Email)
+	if err != nil {
+		return err
+	}
+	inv.ID, _ = res.LastInsertId()
+	return nil
+}
+
+func (r *InvoiceRepo) GetByOrder(orderID, userID int64) (*model.OrderInvoice, error) {
+	inv := &model.OrderInvoice{}
+	err := r.db.QueryRow(
+		`SELECT id, order_id, user_id, invoice_type, title, tax_no, email, status FROM order_invoices WHERE order_id=? AND user_id=?`, orderID, userID,
+	).Scan(&inv.ID, &inv.OrderID, &inv.UserID, &inv.InvoiceType, &inv.Title, &inv.TaxNo, &inv.Email, &inv.Status)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return inv, err
+}
+
 // SeedVIPPrices sets a VIP price (95% of regular) for the first few products if none set.
 func SeedVIPPrices(db *sql.DB) {
 	var n int

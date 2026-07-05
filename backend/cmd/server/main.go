@@ -83,6 +83,8 @@ func main() {
 	// Attach the Q&A repo + seed VIP prices.
 	h.SetQA(repository.NewQARepo(db.DB))
 	repository.SeedVIPPrices(db.DB)
+	// Attach the invoice repo.
+	h.SetInvoice(repository.NewInvoiceRepo(db.DB))
 
 	// Ensure the images directory exists for the static file server.
 	_ = os.MkdirAll("data/images", 0o755)
