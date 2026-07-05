@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getOrders, payOrder, createRefund, confirmOrder } from '../api'
+import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder } from '../api'
 
 const router = useRouter()
 const orders = ref([])
@@ -27,6 +27,15 @@ async function confirm(o) {
     await confirmOrder(o.id)
     o.status = 'completed'
     showSuccessToast('确认收货成功')
+  } catch (e) {
+    showToast(e.response?.data?.error || '操作失败')
+  }
+}
+async function cancel(o) {
+  try {
+    await cancelOrder(o.id)
+    o.status = 'cancelled'
+    showSuccessToast('订单已取消')
   } catch (e) {
     showToast(e.response?.data?.error || '操作失败')
   }
@@ -81,6 +90,7 @@ function parseItems(json) {
           <span>共 {{ parseItems(o.items_json).length }} 件 合计: <b class="price">¥{{ fmt(o.total) }}</b></span>
           <div class="o-actions">
             <van-button v-if="o.status === 'pending'" size="small" type="danger" round @click="pay(o)">去支付</van-button>
+            <van-button v-if="o.status === 'pending'" size="small" plain round @click="cancel(o)">取消订单</van-button>
             <van-button v-if="['shipped','completed'].includes(o.status)" size="small" type="danger" round @click="confirm(o)">确认收货</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请退款</van-button>

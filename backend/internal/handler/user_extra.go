@@ -146,6 +146,24 @@ func (h *Handler) ConfirmOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "已确认收货"})
 }
 
+// CancelOrder cancels a pending order (取消订单).
+func (h *Handler) CancelOrder(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的订单ID"})
+		return
+	}
+	if err := h.Order.CancelOrder(id, uid); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "订单已取消"})
+}
+
 // ===================== Edit profile =====================
 
 func (h *Handler) UpdateProfile(c *gin.Context) {

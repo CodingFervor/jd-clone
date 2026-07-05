@@ -45,6 +45,22 @@ async function doAdvance() {
 function statusText(s) {
   return { shipped: '已发货', in_transit: '运输中', delivered: '已送达', pending: '待发货' }[s] || s || '暂无物流'
 }
+// Map progress: 0-100% based on how many tracks have passed.
+function mapProgress() {
+  if (!shipment.value || !shipment.value.tracks) return 0
+  const stages = { shipped: 25, in_transit: 60, delivered: 100, pending: 0 }
+  return stages[shipment.value.status] || 25
+}
+const routePoints = [
+  { name: '仓库', pos: 5 },
+  { name: '中转站', pos: 38 },
+  { name: '派送中', pos: 72 },
+  { name: '已签收', pos: 95 },
+]
+function activePoint() {
+  const p = mapProgress()
+  return routePoints.filter((rp) => rp.pos <= p).length - 1
+}
 </script>
 
 <template>
@@ -66,6 +82,19 @@ function statusText(s) {
             <div class="track-desc">{{ t.description }}</div>
             <div class="track-loc" v-if="t.location">{{ t.location }}</div>
             <div class="track-time">{{ new Date(t.occurred_at).toLocaleString('zh-CN') }}</div>
+          </div>
+        </div>
+      </div>
+      <!-- Logistics route map (物流地图) -->
+      <div class="map-section">
+        <div class="map-title">📦 物流路线图</div>
+        <div class="map-bar">
+          <div class="map-fill" :style="{ width: mapProgress() + '%' }"></div>
+        </div>
+        <div class="map-points">
+          <div v-for="(p, i) in routePoints" :key="i" class="mp-item" :class="{ active: i <= activePoint() }">
+            <div class="mp-dot"></div>
+            <span class="mp-name">{{ p.name }}</span>
           </div>
         </div>
       </div>
@@ -97,4 +126,14 @@ function statusText(s) {
 .track-item.first .track-desc { color: #e1251b; font-weight: bold; }
 .track-loc { font-size: 12px; color: #999; margin-top: 3px; }
 .track-time { font-size: 11px; color: #ccc; margin-top: 3px; }
+.map-section { background: #fff; margin: 10px; border-radius: 8px; padding: 16px; }
+.map-title { font-size: 15px; font-weight: bold; margin-bottom: 16px; }
+.map-bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin: 0 8px; }
+.map-fill { height: 100%; background: linear-gradient(90deg, #ff9800, #e1251b); transition: width 0.5s; }
+.map-points { display: flex; justify-content: space-between; margin-top: 12px; padding: 0 4px; }
+.mp-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.mp-dot { width: 12px; height: 12px; border-radius: 50%; background: #ddd; }
+.mp-item.active .mp-dot { background: #e1251b; }
+.mp-name { font-size: 11px; color: #999; }
+.mp-item.active .mp-name { color: #e1251b; font-weight: bold; }
 </style>

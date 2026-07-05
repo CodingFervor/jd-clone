@@ -105,6 +105,7 @@ export const deleteAddress = (id) => http.delete(`/addresses/${id}`).then((r) =>
 
 // ---- Order lifecycle ----
 export const confirmOrder = (orderId) => http.post(`/orders/${orderId}/confirm`).then((r) => r.data)
+export const cancelOrder = (orderId) => http.post(`/orders/${orderId}/cancel`).then((r) => r.data)
 
 // ---- Profile ----
 export const updateProfile = (payload) => http.put('/auth/profile', payload).then((r) => r.data.data)

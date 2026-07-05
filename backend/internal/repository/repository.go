@@ -395,6 +395,21 @@ func (r *OrderRepo) ConfirmReceipt(id, userID int64) error {
 	return nil
 }
 
+// CancelOrder cancels a pending order (only 'pending' orders can be cancelled).
+func (r *OrderRepo) CancelOrder(id, userID int64) error {
+	res, err := r.db.Exec(
+		`UPDATE orders SET status='cancelled' WHERE id=? AND user_id=? AND status='pending'`,
+		id, userID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("当前订单状态不允许取消")
+	}
+	return nil
+}
+
 // ===================== Review =====================
 
 type ReviewRepo struct{ db *sql.DB }
