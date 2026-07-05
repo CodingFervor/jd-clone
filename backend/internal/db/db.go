@@ -417,6 +417,8 @@ func migrate() error {
 	_, _ = DB.Exec(`ALTER TABLE products ADD COLUMN video_url TEXT NOT NULL DEFAULT ''`)
 	// Add the vip_price column to products (会员价).
 	_, _ = DB.Exec(`ALTER TABLE products ADD COLUMN vip_price REAL NOT NULL DEFAULT 0`)
+	// Add the useful column to reviews (评价有用数).
+	_, _ = DB.Exec(`ALTER TABLE reviews ADD COLUMN useful INTEGER NOT NULL DEFAULT 0`)
 	return nil
 }
 

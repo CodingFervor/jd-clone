@@ -126,6 +126,9 @@ export const getRedemptions = () => http.get('/points/redemptions').then((r) => 
 // ---- Review replies ----
 export const replyReview = (reviewId, content) => http.post('/reviews/reply', { review_id: reviewId, content }).then((r) => r.data.data)
 
+// ---- Review useful vote (评价有用) ----
+export const markReviewUseful = (id) => http.post(`/reviews/${id}/useful`).then((r) => r.data)
+
 // ---- Seckill deals (秒杀) ----
 export const getSeckillDeals = () => http.get('/seckill').then((r) => r.data.data)
 export const grabSeckill = (id) => http.post(`/seckill/${id}/grab`).then((r) => r.data)

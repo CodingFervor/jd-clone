@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA, markReviewUseful } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -153,6 +153,16 @@ async function submitReply(r) {
     replyingTo.value = null
     replyText.value = ''
     showSuccessToast('回复成功')
+  } catch (e) {
+    showToast('请先登录')
+  }
+}
+async function doUseful(r) {
+  if (!checkLogin()) return
+  try {
+    await markReviewUseful(r.id)
+    r.useful = (r.useful || 0) + 1
+    showSuccessToast('已标记有用')
   } catch (e) {
     showToast('请先登录')
   }
@@ -343,6 +353,9 @@ function priceTrend() {
         <div v-if="r.images" class="rev-photos">
           <van-image v-for="(img, i) in r.images.split(',')" :key="i" width="72" height="72" radius="6" :src="img" fit="cover" />
         </div>
+        <div class="rev-actions">
+          <span class="rev-useful-btn" @click="doUseful(r)"><van-icon name="good-job-o" /> 有用 ({{ r.useful || 0 }})</span>
+        </div>
         <div v-if="r.reply" class="rev-reply">
           <span class="rev-reply-name">{{ r.reply.username }}：</span>{{ r.reply.content }}
         </div>
@@ -469,6 +482,9 @@ function priceTrend() {
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }
 .rev-photos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rev-actions { margin-top: 6px; }
+.rev-useful-btn { color: #999; font-size: 12px; cursor: pointer; }
+.rev-useful-btn:active { color: #e1251b; }
 .rev-reply-btn { margin-left: auto; color: #e1251b; font-size: 12px; }
 .rev-reply { background: #f7f7f7; border-radius: 6px; padding: 6px 10px; margin-top: 6px; font-size: 12px; color: #666; line-height: 18px; }
 .rev-reply-name { color: #e1251b; }

@@ -418,7 +418,7 @@ func NewReviewRepo(db *sql.DB) *ReviewRepo { return &ReviewRepo{db: db} }
 
 func (r *ReviewRepo) ListByProduct(productID int64) ([]model.Review, error) {
 	rows, err := r.db.Query(
-		`SELECT id, product_id, user_id, username, rating, content, images, created_at
+		`SELECT id, product_id, user_id, username, rating, content, images, useful, created_at
 		 FROM reviews WHERE product_id=? ORDER BY id DESC`, productID)
 	if err != nil {
 		return nil, err
@@ -427,7 +427,7 @@ func (r *ReviewRepo) ListByProduct(productID int64) ([]model.Review, error) {
 	out := []model.Review{}
 	for rows.Next() {
 		var rv model.Review
-		if err := rows.Scan(&rv.ID, &rv.ProductID, &rv.UserID, &rv.Username, &rv.Rating, &rv.Content, &rv.Images, &rv.CreatedAt); err == nil {
+		if err := rows.Scan(&rv.ID, &rv.ProductID, &rv.UserID, &rv.Username, &rv.Rating, &rv.Content, &rv.Images, &rv.Useful, &rv.CreatedAt); err == nil {
 			rv.Reply, _ = r.getReply(rv.ID)
 			out = append(out, rv)
 		}
@@ -471,6 +471,12 @@ func (r *ReviewRepo) AddReply(rep *model.ReviewReply) error {
 	}
 	rep.ID, _ = res.LastInsertId()
 	return nil
+}
+
+// MarkUseful increments the helpful-vote counter for a review (评价有用).
+func (r *ReviewRepo) MarkUseful(id int64) error {
+	_, err := r.db.Exec(`UPDATE reviews SET useful = useful + 1 WHERE id=?`, id)
+	return err
 }
 
 // ===================== Address =====================
