@@ -715,3 +715,15 @@ func (h *Handler) AnswerQA(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "已回答"})
 }
+
+// ===================== Tiered discounts (阶梯满减) =====================
+
+// ListTieredDiscounts: GET /tiered-discounts (public) — active spend-X-get-Y-off tiers.
+func (h *Handler) ListTieredDiscounts(c *gin.Context) {
+	list, err := h.TieredDiscount.ListActive()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list})
+}

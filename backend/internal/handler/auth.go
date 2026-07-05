@@ -17,32 +17,33 @@ import (
 
 // Handler bundles all repositories and shares the JWT secret.
 type Handler struct {
-	User         *repository.UserRepo
-	Cat          *repository.CategoryRepo
-	Product      *repository.ProductRepo
-	Cart         *repository.CartRepo
-	Order        *repository.OrderRepo
-	Review       *repository.ReviewRepo
-	Address      *repository.AddressRepo
-	SKU          *repository.SKURepo
-	Payment      *repository.PaymentRepo
-	Shipment     *repository.ShipmentRepo
-	Refund       *repository.RefundRepo
-	Coupon       *repository.CouponRepo
-	Favorite     *repository.FavoriteRepo
-	History      *repository.HistoryRepo
-	CheckIn      *repository.CheckInRepo
-	Shop         *repository.PointShopRepo
-	Seckill      *repository.SeckillRepo
-	GroupBuy     *repository.GroupBuyRepo
-	Presale      *repository.PresaleRepo
-	PriceHistory *repository.PriceHistoryRepo
-	ShopRating   *repository.ShopRatingRepo
-	Bundle       *repository.BundleRepo
-	Restock      *repository.RestockRepo
-	QA           *repository.QARepo
-	Invoice      *repository.InvoiceRepo
-	jwtKey       []byte
+	User           *repository.UserRepo
+	Cat            *repository.CategoryRepo
+	Product        *repository.ProductRepo
+	Cart           *repository.CartRepo
+	Order          *repository.OrderRepo
+	Review         *repository.ReviewRepo
+	Address        *repository.AddressRepo
+	SKU            *repository.SKURepo
+	Payment        *repository.PaymentRepo
+	Shipment       *repository.ShipmentRepo
+	Refund         *repository.RefundRepo
+	Coupon         *repository.CouponRepo
+	Favorite       *repository.FavoriteRepo
+	History        *repository.HistoryRepo
+	CheckIn        *repository.CheckInRepo
+	Shop           *repository.PointShopRepo
+	Seckill        *repository.SeckillRepo
+	GroupBuy       *repository.GroupBuyRepo
+	Presale        *repository.PresaleRepo
+	PriceHistory   *repository.PriceHistoryRepo
+	ShopRating     *repository.ShopRatingRepo
+	Bundle         *repository.BundleRepo
+	Restock        *repository.RestockRepo
+	QA             *repository.QARepo
+	Invoice        *repository.InvoiceRepo
+	TieredDiscount *repository.TieredDiscountRepo
+	jwtKey         []byte
 }
 
 func New(jwtSecret string, u *repository.UserRepo, c *repository.CategoryRepo, p *repository.ProductRepo,
@@ -101,6 +102,11 @@ func (h *Handler) SetQA(qa *repository.QARepo) {
 // SetInvoice attaches the invoice repo.
 func (h *Handler) SetInvoice(inv *repository.InvoiceRepo) {
 	h.Invoice = inv
+}
+
+// SetTieredDiscount attaches the tiered-discount (阶梯满减) repo.
+func (h *Handler) SetTieredDiscount(td *repository.TieredDiscountRepo) {
+	h.TieredDiscount = td
 }
 
 // ---- JWT (HS256, hand-rolled, no external dep) ----

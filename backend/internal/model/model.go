@@ -74,11 +74,12 @@ type CartItem struct {
 	Quantity  int   `json:"quantity"`
 	Selected  int   `json:"selected"`
 	// Joined product fields (populated for list responses).
-	ProductName string    `json:"product_name" db:"p_name"`
-	ProductImg  string    `json:"product_image" db:"p_image"`
-	Price       float64   `json:"price" db:"p_price"`
-	Stock       int       `json:"stock" db:"p_stock"`
-	CreatedAt   time.Time `json:"created_at"`
+	ProductName   string    `json:"product_name" db:"p_name"`
+	ProductImg    string    `json:"product_image" db:"p_image"`
+	Price         float64   `json:"price" db:"p_price"`
+	OriginalPrice float64   `json:"original_price" db:"p_original_price"`
+	Stock         int       `json:"stock" db:"p_stock"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // Order is a placed purchase.
@@ -299,6 +300,15 @@ type OrderInvoice struct {
 	TaxNo       string `json:"tax_no"`
 	Email       string `json:"email"`
 	Status      string `json:"status"`
+}
+
+// TieredDiscount is one tier of a store-wide spend-X-get-Y-off promo (阶梯满减).
+type TieredDiscount struct {
+	ID        int64   `json:"id"`
+	Threshold float64 `json:"threshold"` // 满 threshold 元
+	Discount  float64 `json:"discount"`  // 减 discount 元
+	Status    string  `json:"status"`    // active, inactive
+	SortOrder int     `json:"sort_order"`
 }
 
 // SKU is a specific spec combination (color/size/version) of a product.

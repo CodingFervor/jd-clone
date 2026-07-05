@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getCart, createOrder, getMyCoupons, getAddresses, requestInvoice } from '../api'
+import { getCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts } from '../api'
 
 const router = useRouter()
 const items = ref([])
@@ -10,6 +10,7 @@ const address = ref('')
 const remark = ref('')
 const coupons = ref([])
 const addresses = ref([])
+const tieredDiscounts = ref([]) // active spend-X-get-Y-off tiers (阶梯满减)
 const selectedCouponId = ref(null) // user_coupon_id
 const showCouponPicker = ref(false)
 const showAddrPicker = ref(false)
@@ -49,12 +50,42 @@ const discount = computed(() => {
 })
 const finalTotal = computed(() => Math.max(0, subtotal.value - discount.value))
 
+// Tiered discounts (阶梯满减): banner text + best applicable discount + next-tier hint.
+const tieredBanner = computed(() =>
+  (tieredDiscounts.value || []).map((t) => `满${Math.round(t.threshold)}减${Math.round(t.discount)}`).join(' | ')
+)
+
+// The largest discount whose threshold the current subtotal meets.
+const tieredApplied = computed(() => {
+  let best = null
+  for (const t of tieredDiscounts.value || []) {
+    if (subtotal.value >= t.threshold && (!best || t.discount > best.discount)) best = t
+  }
+  return best
+})
+
+// "再买¥X可减¥Y" — the closest tier the subtotal has NOT yet reached.
+const tieredHint = computed(() => {
+  const next = (tieredDiscounts.value || []).find((t) => subtotal.value < t.threshold)
+  if (!next) return null
+  const diff = Math.ceil(next.threshold - subtotal.value)
+  // Only prompt when the next tier is reasonably close (within ¥100).
+  if (diff > 100) return null
+  return { diff, discount: Math.round(next.discount) }
+})
+
 onMounted(async () => {
   try {
-    const [cartRes, myCoupons, myAddrs] = await Promise.all([getCart(), getMyCoupons(), getAddresses().catch(() => [])])
+    const [cartRes, myCoupons, myAddrs, tiers] = await Promise.all([
+      getCart(),
+      getMyCoupons(),
+      getAddresses().catch(() => []),
+      getTieredDiscounts().catch(() => []),
+    ])
     items.value = (cartRes.data || []).filter((i) => i.selected === 1)
     coupons.value = myCoupons || []
     addresses.value = myAddrs || []
+    tieredDiscounts.value = tiers || []
     const def = addresses.value.find((a) => a.is_default) || addresses.value[0]
     if (def) address.value = def.detail
   } catch (e) {
@@ -129,6 +160,13 @@ function fmt(n) { return Number(n).toFixed(2) }
         💡 再买 <b>¥{{ h.diff }}</b> 可使用 {{ h.label }}，<span class="th-go" @click="router.push('/home')">去凑单 ›</span>
       </div>
     </div>
+    <!-- Tiered discount banner (阶梯满减) -->
+    <div v-if="tieredBanner" class="tiered-banner">
+      <span class="tb-title">满减</span>
+      <span class="tb-text">{{ tieredBanner }}</span>
+      <span v-if="tieredApplied" class="tb-applied">已减¥{{ Math.round(tieredApplied.discount) }}</span>
+    </div>
+    <div v-if="tieredHint" class="tiered-hint">再买 <b>¥{{ tieredHint.diff }}</b> 可减 <b>¥{{ tieredHint.discount }}</b></div>
     <div class="price-detail">
       <div class="pd-row"><span>商品总额</span><span>¥{{ fmt(subtotal) }}</span></div>
       <div class="pd-row" v-if="discount > 0"><span>优惠券抵扣</span><span class="discount">-¥{{ fmt(discount) }}</span></div>
@@ -196,6 +234,12 @@ function fmt(n) { return Number(n).toFixed(2) }
 .ci-info { flex: 1; font-size: 13px; }
 .ci-p { color: #e1251b; margin-top: 4px; }
 .price-detail { background: #fff; margin: 8px 16px; border-radius: 8px; padding: 12px 16px; }
+.tiered-banner { display: flex; align-items: center; gap: 8px; margin: 0 16px; padding: 8px 12px; background: linear-gradient(90deg, #fff0ee, #fff); border: 1px solid #ffd9d3; border-radius: 8px; font-size: 12px; }
+.tiered-banner .tb-title { background: #e1251b; color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 3px; }
+.tiered-banner .tb-text { flex: 1; color: #e1251b; font-weight: bold; }
+.tiered-banner .tb-applied { color: #fff; background: #e1251b; font-size: 11px; padding: 1px 6px; border-radius: 3px; }
+.tiered-hint { margin: 6px 16px 0; padding: 6px 12px; background: #fff8e6; color: #996600; font-size: 12px; border-radius: 8px; }
+.tiered-hint b { color: #e1251b; }
 .topup-hints { margin: 0 16px 8px; }
 .th-item { background: #fff8e6; color: #996600; font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; line-height: 18px; }
 .th-item b { color: #e1251b; }

@@ -73,6 +73,12 @@ async function checkout() {
 function fmt(n) {
   return Number(n).toFixed(2)
 }
+
+// A "降价" tag for items whose original price is significantly higher than the
+// current price (indicating an active discount / price drop).
+function isPriceDrop(it) {
+  return Number(it.original_price) > Number(it.price) * 1.1
+}
 </script>
 
 <template>
@@ -87,7 +93,10 @@ function fmt(n) {
           <van-checkbox :model-value="it.selected === 1" @click="toggleSelect(it)" />
           <van-image width="80" height="80" radius="6" :src="it.product_image" fit="cover" @click="router.push('/product/' + it.product_id)" />
           <div class="ci-info">
-            <div class="ci-name van-multi-ellipsis--l2">{{ it.product_name }}</div>
+            <div class="ci-name van-multi-ellipsis--l2">
+              <van-tag v-if="isPriceDrop(it)" type="danger" size="mini" class="drop-tag">降价</van-tag>
+              {{ it.product_name }}
+            </div>
             <div class="ci-bottom">
               <span class="price">¥{{ fmt(it.price) }}</span>
               <van-stepper v-model="it.quantity" :min="1" :max="it.stock" @change="(v) => changeQty(it, v)" />
@@ -109,6 +118,7 @@ function fmt(n) {
 .cart-item { display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border-bottom: 1px solid #f5f5f5; }
 .ci-info { flex: 1; }
 .ci-name { font-size: 13px; line-height: 18px; height: 36px; }
+.ci-name .drop-tag { vertical-align: middle; margin-right: 4px; }
 .ci-bottom { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .ci-bottom .price { font-size: 16px; flex: 1; }
 </style>

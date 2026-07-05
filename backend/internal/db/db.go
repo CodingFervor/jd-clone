@@ -393,6 +393,14 @@ func createTables() error {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON order_invoices(user_id)`,
+		// Tiered discounts: store-wide spend-X-get-Y-off tiers (阶梯满减).
+		`CREATE TABLE IF NOT EXISTS tiered_discounts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			threshold REAL NOT NULL DEFAULT 0,
+			discount REAL NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'active',
+			sort_order INTEGER NOT NULL DEFAULT 0
+		)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.

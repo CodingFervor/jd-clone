@@ -165,4 +165,7 @@ export const getProductQA = (id) => http.get(`/products/${id}/qa`).then((r) => r
 export const askProductQA = (id, question) => http.post(`/products/${id}/qa`, { question }).then((r) => r.data.data)
 export const answerProductQA = (qaId, answer) => http.post(`/qa/${qaId}/answer`, { answer }).then((r) => r.data)
 
+// ---- Tiered discounts (阶梯满减) ----
+export const getTieredDiscounts = () => http.get('/tiered-discounts').then((r) => r.data.data)
+
 export { errMsg }

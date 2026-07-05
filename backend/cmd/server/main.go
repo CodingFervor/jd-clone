@@ -85,6 +85,10 @@ func main() {
 	repository.SeedVIPPrices(db.DB)
 	// Attach the invoice repo.
 	h.SetInvoice(repository.NewInvoiceRepo(db.DB))
+	// Attach + seed the tiered-discount (阶梯满减) repo.
+	tieredRepo := repository.NewTieredDiscountRepo(db.DB)
+	tieredRepo.SeedTiers()
+	h.SetTieredDiscount(tieredRepo)
 
 	// Ensure the images directory exists for the static file server.
 	_ = os.MkdirAll("data/images", 0o755)
