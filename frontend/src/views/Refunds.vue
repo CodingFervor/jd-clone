@@ -22,7 +22,7 @@ function statusColor(s) {
   return { pending: 'warning', approved: 'primary', rejected: 'danger', completed: 'success' }[s] || 'default'
 }
 function typeText(t) {
-  return { refund_only: '仅退款', return_refund: '退货退款' }[t] || '退款'
+  return { refund_only: '仅退款', return_refund: '退货退款', exchange: '换货' }[t] || '退款'
 }
 function fmtTime(t) {
   if (!t) return ''

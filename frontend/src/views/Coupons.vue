@@ -21,9 +21,28 @@ async function load() {
   } finally {
     loading.value = false
   }
+  // Auto-claim when arriving via a shared ?claim=<id> link.
+  const claimId = router.currentRoute.value.query.claim
+  if (claimId) maybeClaimShared(Number(claimId))
 }
 onMounted(load)
 onActivated(load)
+
+// Claim a coupon referenced by a shared link, if still available.
+async function maybeClaimShared(id) {
+  const c = coupons.value.find((x) => x.id === id)
+  if (!c) return
+  if (!loggedIn.value) { router.push('/login'); return }
+  if (c.is_claimed) return
+  try {
+    await claimCoupon(id)
+    c.is_claimed = true
+    myCoupons.value = await getMyCoupons()
+    showSuccessToast('已通过分享链接领取')
+  } catch (e) {
+    showToast(e.response?.data?.error || '领取失败')
+  }
+}
 
 async function claim(c) {
   if (!loggedIn.value) { router.push('/login'); return }
@@ -34,6 +53,24 @@ async function claim(c) {
     showSuccessToast('领取成功')
   } catch (e) {
     showToast(e.response?.data?.error || '领取失败')
+  }
+}
+async function share(c) {
+  const link = window.location.origin + '/#/coupons?claim=' + c.id
+  try {
+    await navigator.clipboard.writeText(link)
+    showSuccessToast('分享链接已复制')
+  } catch (e) {
+    // Fallback for non-secure contexts (e.g. plain HTTP) without clipboard API.
+    const ta = document.createElement('textarea')
+    ta.value = link
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try { document.execCommand('copy'); showSuccessToast('分享链接已复制') }
+    catch { showToast('复制失败，请手动复制') }
+    document.body.removeChild(ta)
   }
 }
 function couponValue(c) {
@@ -58,8 +95,11 @@ function couponValue(c) {
         <div class="cc-right">
           <div class="cc-title">{{ c.title }}</div>
           <div class="cc-date">{{ c.end_date }} 到期</div>
-          <van-button v-if="!c.is_claimed" size="small" type="danger" round @click="claim(c)">立即领取</van-button>
-          <van-tag v-else type="success">已领取</van-tag>
+          <div class="cc-actions">
+            <van-button v-if="!c.is_claimed" size="small" type="danger" round @click="claim(c)">立即领取</van-button>
+            <van-tag v-else type="success">已领取</van-tag>
+            <van-button size="small" plain type="danger" round @click="share(c)">分享</van-button>
+          </div>
         </div>
       </div>
 
@@ -95,4 +135,5 @@ function couponValue(c) {
 .cc-right { flex: 1; padding: 12px 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
 .cc-title { font-size: 14px; font-weight: bold; }
 .cc-date { font-size: 12px; color: #999; }
+.cc-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 </style>

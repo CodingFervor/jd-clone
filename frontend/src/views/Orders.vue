@@ -84,14 +84,28 @@ function viewLogistics(o) {
   router.push({ name: 'logistics', query: { order_id: o.id } })
 }
 async function applyRefund(o) {
-  const reason = window.prompt('请输入退款原因')
+  const type = pickRefundType()
+  if (!type) return
+  const promptLabel = type === 'exchange' ? '请输入换货原因' : '请输入退款原因'
+  const reason = window.prompt(promptLabel)
   if (!reason || !reason.trim()) return
   try {
-    await createRefund(o.id, reason, 'refund_only')
-    showSuccessToast('退款申请已提交')
+    await createRefund(o.id, reason, type)
+    showSuccessToast(type === 'exchange' ? '换货申请已提交' : '退款申请已提交')
   } catch (e) {
     showToast(e.response?.data?.error || '申请失败')
   }
+}
+
+// Map a numeric choice (1/2/3) from the user to an after-sale type key.
+// Returns '' if cancelled or the input is invalid.
+function pickRefundType() {
+  const choice = window.prompt('请选择售后类型，输入数字：\n1 仅退款\n2 退货退款\n3 换货')
+  if (choice === null) return ''
+  const map = { '1': 'refund_only', '2': 'return_refund', '3': 'exchange' }
+  const key = map[String(choice).trim()]
+  if (!key) showToast('已取消或选项无效')
+  return key || ''
 }
 function statusText(s) {
   return { pending: '待付款', paid: '已付款', shipped: '已发货', completed: '已完成', cancelled: '已取消' }[s] || s
@@ -136,7 +150,7 @@ function parseItems(json) {
             <van-button v-if="o.status === 'pending'" size="small" plain round @click="cancel(o)">取消订单</van-button>
             <van-button v-if="['shipped','completed'].includes(o.status)" size="small" type="danger" round @click="confirm(o)">确认收货</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
-            <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请退款</van-button>
+            <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请售后</van-button>
           </div>
         </div>
       </div>
