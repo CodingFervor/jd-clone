@@ -401,6 +401,15 @@ func createTables() error {
 			status TEXT NOT NULL DEFAULT 'active',
 			sort_order INTEGER NOT NULL DEFAULT 0
 		)`,
+		// Lottery prizes: weighted prizes for the points lottery wheel (积分大转盘).
+		`CREATE TABLE IF NOT EXISTS lottery_prizes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			points_cost INTEGER NOT NULL DEFAULT 50,
+			prize TEXT NOT NULL DEFAULT '',
+			probability INTEGER NOT NULL DEFAULT 10,
+			icon TEXT NOT NULL DEFAULT '🎁'
+		)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.

@@ -56,6 +56,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		// Public tiered-discount (阶梯满减) listing
 		api.GET("/tiered-discounts", h.ListTieredDiscounts)
 
+		// Public lottery wheel (积分大转盘) prize listing
+		api.GET("/lottery/prizes", h.ListLotteryPrizes)
+
 		// Public shipment tracking by tracking number
 		api.GET("/shipments/track", h.TrackByNo)
 
@@ -162,6 +165,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			auth.PUT("/admin/products/:id", h.AdminUpdateProduct)
 			auth.DELETE("/admin/products/:id", h.AdminDeleteProduct)
 			auth.POST("/admin/products/:id/skus", h.CreateSKU)
+
+			// Lottery wheel spin (积分大转盘)
+			auth.POST("/lottery/spin", h.SpinLottery)
 		}
 	}
 	return r

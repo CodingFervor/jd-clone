@@ -11,6 +11,8 @@ const reviews = ref([])
 const skus = ref([])
 const selectedSKU = ref(null)
 const recommendedSKU = ref(null)
+// Estimated delivery (预计送达) — purely frontend, computed once on load.
+const deliveryEstimate = ref('')
 // Price history (比价历史)
 const priceHistory = ref([])
 const priceStats = ref(null)
@@ -54,6 +56,8 @@ onMounted(async () => {
     product.value = res.data
     reviews.value = res.reviews || []
     skus.value = res.skus || []
+    // Compute the estimated delivery label once on load.
+    deliveryEstimate.value = computeDelivery()
     // Auto-select the recommended (best-value) SKU.
     if (res.recommended_sku) {
       selectedSKU.value = res.recommended_sku
@@ -175,6 +179,14 @@ function goProduct(id) {
   // Force reload by re-running onMounted logic.
   setTimeout(() => window.location.reload(), 50)
 }
+// Estimate delivery based on the current time of day (预计送达).
+// Before 11am → today, before 5pm → tomorrow, otherwise the day after tomorrow.
+function computeDelivery() {
+  const h = new Date().getHours()
+  if (h < 11) return '今日达'
+  if (h < 17) return '明日达'
+  return '后天达'
+}
 // Deterministic pseudo-QR pattern for the share poster (purely decorative).
 function qrPattern(n) {
   const row = Math.floor((n - 1) / 8)
@@ -288,6 +300,11 @@ function priceTrend() {
       <van-cell title="店铺" :value="product.shop" is-link @click="router.push('/shop/' + encodeURIComponent(product.shop))" />
       <van-cell title="销量" :value="product.sales + '人付款'" />
       <van-cell title="标签" :value="product.tags || '京东自营'" />
+      <van-cell title="预计送达">
+        <template #value>
+          <span class="delivery-value">🚚 {{ deliveryEstimate }}</span>
+        </template>
+      </van-cell>
       <van-cell :title="restockSubscribed ? '到货通知已开启' : '到货通知'" is-link @click="toggleRestock">
         <template #right-icon>
           <van-switch :model-value="restockSubscribed" size="20" @click.stop="toggleRestock" active-color="#e1251b" />
@@ -464,6 +481,7 @@ function priceTrend() {
 .title-block { padding: 0 16px 12px; background: #fff; }
 .p-title { font-size: 17px; line-height: 24px; }
 .p-sub { color: #999; font-size: 13px; margin-top: 4px; }
+.delivery-value { color: #e1251b; font-weight: 500; }
 .desc, .reviews { background: #fff; margin-top: 8px; padding: 12px 16px; }
 .price-history { background: #fff; margin-top: 8px; padding: 12px 16px; }
 .ph-head { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: bold; margin-bottom: 10px; }

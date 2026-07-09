@@ -190,6 +190,17 @@ type Redemption struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// LotteryPrize is one segment of the points lottery wheel (积分大转盘).
+// Probability is a relative weight used for weighted-random selection.
+type LotteryPrize struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	PointsCost  int    `json:"points_cost"`
+	Prize       string `json:"prize"`       // reward descriptor (e.g. "5" points, "coupon", "plus")
+	Probability int    `json:"probability"` // relative weight
+	Icon        string `json:"icon"`
+}
+
 // SeckillDeal is a time-boxed flash sale with a separate stock pool.
 type SeckillDeal struct {
 	ID           int64     `json:"id"`

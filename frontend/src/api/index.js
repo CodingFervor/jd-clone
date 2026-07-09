@@ -168,4 +168,8 @@ export const answerProductQA = (qaId, answer) => http.post(`/qa/${qaId}/answer`,
 // ---- Tiered discounts (阶梯满减) ----
 export const getTieredDiscounts = () => http.get('/tiered-discounts').then((r) => r.data.data)
 
+// ---- Lottery wheel (积分大转盘) ----
+export const getPrizes = () => http.get('/lottery/prizes').then((r) => r.data)
+export const spinLottery = () => http.post('/lottery/spin').then((r) => r.data)
+
 export { errMsg }

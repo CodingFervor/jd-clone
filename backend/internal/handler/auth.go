@@ -43,6 +43,7 @@ type Handler struct {
 	QA             *repository.QARepo
 	Invoice        *repository.InvoiceRepo
 	TieredDiscount *repository.TieredDiscountRepo
+	Lottery        *repository.LotteryRepo
 	jwtKey         []byte
 }
 
@@ -107,6 +108,11 @@ func (h *Handler) SetInvoice(inv *repository.InvoiceRepo) {
 // SetTieredDiscount attaches the tiered-discount (阶梯满减) repo.
 func (h *Handler) SetTieredDiscount(td *repository.TieredDiscountRepo) {
 	h.TieredDiscount = td
+}
+
+// SetLottery attaches the lottery-wheel (积分大转盘) repo.
+func (h *Handler) SetLottery(l *repository.LotteryRepo) {
+	h.Lottery = l
 }
 
 // ---- JWT (HS256, hand-rolled, no external dep) ----

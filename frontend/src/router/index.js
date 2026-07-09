@@ -22,6 +22,7 @@ const routes = [
   { path: '/history', name: 'history', component: () => import('../views/History.vue'), meta: { auth: true } },
   { path: '/checkin', name: 'checkin', component: () => import('../views/CheckIn.vue'), meta: { auth: true } },
   { path: '/points-shop', name: 'pointShop', component: () => import('../views/PointShop.vue'), meta: { auth: true } },
+  { path: '/lottery', name: 'lottery', component: () => import('../views/Lottery.vue'), meta: { auth: true } },
   { path: '/seckill', name: 'seckill', component: () => import('../views/Seckill.vue') },
   { path: '/group-buy', name: 'groupBuy', component: () => import('../views/GroupBuy.vue') },
   { path: '/presale', name: 'presale', component: () => import('../views/Presale.vue') },

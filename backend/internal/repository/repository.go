@@ -837,6 +837,16 @@ func (r *PointShopRepo) Redeem(userID, productID int64) (*model.Redemption, erro
 	return rd, nil
 }
 
+// SpendPoints records a points deduction that is not tied to a point product
+// (e.g. a lottery-wheel spin). It reduces the user's available balance, which
+// is computed as earned (check_ins) minus spent (redemptions).
+func (r *PointShopRepo) SpendPoints(userID int64, cost int, note string) error {
+	_, err := r.db.Exec(
+		`INSERT INTO redemptions (user_id, product_id, points_cost, status) VALUES (?,?,?,?)`,
+		userID, 0, cost, note)
+	return err
+}
+
 // ListRedemptions returns a user's redemption history.
 func (r *PointShopRepo) ListRedemptions(userID int64) ([]model.Redemption, error) {
 	rows, err := r.db.Query(
@@ -880,6 +890,57 @@ func (r *PointShopRepo) SeedPointShop() {
 		_, _ = r.db.Exec(
 			`INSERT INTO point_products (name, image, points, stock, sort_order) VALUES (?,?,?,?,?)`,
 			it.name, it.image, it.points, it.stock, i)
+	}
+}
+
+// ===================== Lottery wheel (积分大转盘) =====================
+
+type LotteryRepo struct{ db *sql.DB }
+
+func NewLotteryRepo(db *sql.DB) *LotteryRepo { return &LotteryRepo{db: db} }
+
+// List returns all lottery prizes ordered by id (the wheel segment order).
+func (r *LotteryRepo) List() ([]model.LotteryPrize, error) {
+	rows, err := r.db.Query(
+		`SELECT id, name, points_cost, prize, probability, icon FROM lottery_prizes ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.LotteryPrize{}
+	for rows.Next() {
+		var p model.LotteryPrize
+		if err := rows.Scan(&p.ID, &p.Name, &p.PointsCost, &p.Prize, &p.Probability, &p.Icon); err == nil {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+// SeedPrizes populates the lottery wheel with demo prizes if empty.
+func (r *LotteryRepo) SeedPrizes() {
+	var n int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM lottery_prizes`).Scan(&n)
+	if n > 0 {
+		return
+	}
+	items := []struct {
+		name        string
+		icon        string
+		prize       string
+		probability int
+	}{
+		{"谢谢参与", "😅", "", 40},
+		{"5积分", "💰", "5", 25},
+		{"10元券", "🎟️", "coupon", 15},
+		{"50积分", "💎", "50", 10},
+		{"PLUS会员", "👑", "plus", 5},
+		{"100积分", "🏆", "100", 5},
+	}
+	for _, it := range items {
+		_, _ = r.db.Exec(
+			`INSERT INTO lottery_prizes (name, points_cost, prize, probability, icon) VALUES (?,?,?,?,?)`,
+			it.name, 50, it.prize, it.probability, it.icon)
 	}
 }
 
