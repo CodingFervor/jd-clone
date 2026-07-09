@@ -120,6 +120,35 @@ function parseItems(json) {
     return []
   }
 }
+
+// Resolve a grouping key for an order line. Prefer an explicit `shop` field
+// when the backend stores one; otherwise fall back to the brand/name prefix
+// (first whitespace-delimited token of the product name, e.g. "Apple",
+// "华为", "美的"). Returns '' for empty items.
+function shopKey(it) {
+  if (!it) return ''
+  if (it.shop && String(it.shop).trim()) return String(it.shop).trim()
+  const name = String(it.name || '').trim()
+  if (!name) return ''
+  return name.split(/\s+/)[0]
+}
+
+// Group an order's parsed items into "packages", one per shop/brand.
+// Returns an array of { key, items } preserving first-seen order.
+function groupPackages(items) {
+  const groups = []
+  const idx = new Map()
+  for (const it of items) {
+    const key = shopKey(it) || '默认包裹'
+    if (idx.has(key)) {
+      groups[idx.get(key)].items.push(it)
+    } else {
+      idx.set(key, groups.length)
+      groups.push({ key, items: [it] })
+    }
+  }
+  return groups
+}
 </script>
 
 <template>
@@ -136,11 +165,23 @@ function parseItems(json) {
             <span v-if="o.status === 'pending'" class="o-countdown">（{{ countdownText(o) }}）</span>
           </span>
         </div>
-        <div v-for="(it, i) in parseItems(o.items_json)" :key="i" class="o-item">
-          <van-image width="60" height="60" radius="6" :src="it.image" fit="cover" />
-          <div class="oi-info">
-            <div class="oi-name van-ellipsis">{{ it.name }}</div>
-            <div class="oi-price">¥{{ fmt(it.price) }} × {{ it.quantity }}</div>
+        <div class="o-packages">
+          <div
+            v-for="(pkg, pi) in groupPackages(parseItems(o.items_json))"
+            :key="pi"
+            class="o-package"
+          >
+            <div v-if="groupPackages(parseItems(o.items_json)).length > 1" class="o-pkg-head">
+              📦 <span class="o-pkg-label">包裹{{ pi + 1 }}</span>
+              <span class="o-pkg-shop van-ellipsis">{{ pkg.key }}</span>
+            </div>
+            <div v-for="(it, i) in pkg.items" :key="i" class="o-item">
+              <van-image width="60" height="60" radius="6" :src="it.image" fit="cover" />
+              <div class="oi-info">
+                <div class="oi-name van-ellipsis">{{ it.name }}</div>
+                <div class="oi-price">¥{{ fmt(it.price) }} × {{ it.quantity }}</div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="o-foot">
@@ -166,6 +207,12 @@ function parseItems(json) {
 .o-status { color: #e1251b; }
 .o-countdown { color: #e1251b; font-weight: 600; }
 .o-item { display: flex; gap: 10px; padding: 6px 0; }
+.o-packages { display: flex; flex-direction: column; gap: 10px; }
+.o-package { padding: 4px 0; }
+.o-package + .o-package { border-top: 1px dashed #eee; padding-top: 10px; }
+.o-pkg-head { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #666; margin-bottom: 4px; }
+.o-pkg-label { font-weight: 600; color: #333; }
+.o-pkg-shop { color: #999; flex: 1; }
 .oi-info { flex: 1; }
 .oi-name { font-size: 13px; }
 .oi-price { color: #999; font-size: 12px; margin-top: 4px; }

@@ -12,6 +12,41 @@ const activeId = ref(0)
 const loading = ref(false)
 const sortBy = ref('default') // default, price_asc, price_desc, sales
 
+// Product compare: track up to 2 products for side-by-side comparison.
+const compareList = ref([])
+const showCompare = ref(false)
+
+function toggleCompare(p) {
+  const i = compareList.value.findIndex((x) => x.id === p.id)
+  if (i >= 0) {
+    compareList.value.splice(i, 1)
+    return
+  }
+  if (compareList.value.length >= 2) {
+    showToast('最多对比 2 件商品')
+    return
+  }
+  compareList.value.push(p)
+}
+
+function inCompare(p) {
+  return compareList.value.some((x) => x.id === p.id)
+}
+
+function clearCompare() {
+  compareList.value = []
+  showCompare.value = false
+}
+
+// Which of the two compared products has the cheaper price (for red highlight).
+function cheaperIs(idx) {
+  if (compareList.value.length < 2) return false
+  const a = compareList.value[0]
+  const b = compareList.value[1]
+  if (idx === 0) return a.price <= b.price
+  return b.price < a.price
+}
+
 onMounted(async () => {
   try {
     cats.value = await getCategories()
@@ -78,7 +113,13 @@ function fmt(n) {
         </div>
         <div v-if="loading" class="loading"><van-loading /></div>
         <div v-else>
-          <div v-for="p in filteredProducts" :key="p.id" class="prod-row" @click="goProduct(p.id)">
+          <div
+            v-for="p in filteredProducts"
+            :key="p.id"
+            class="prod-row"
+            :class="{ 'prod-comparing': inCompare(p) }"
+            @click="goProduct(p.id)"
+          >
             <van-image width="100" height="100" radius="6" :src="p.image" fit="cover" />
             <div class="prod-info">
               <div class="prod-name van-multi-ellipsis--l2">{{ p.name }}</div>
@@ -88,11 +129,62 @@ function fmt(n) {
                 <span class="prod-sales">{{ p.sales }}人付款</span>
               </div>
             </div>
+            <div class="compare-btn" @click.stop="toggleCompare(p)">
+              <span class="cb-box" :class="{ checked: inCompare(p) }">{{ inCompare(p) ? '✓' : '' }}</span>
+              <span class="cb-text">对比</span>
+            </div>
           </div>
           <van-empty v-if="!filteredProducts.length" description="暂无商品" />
         </div>
       </div>
     </div>
+
+    <!-- Floating compare button: appears once at least one product is picked. -->
+    <transition name="cmp-fade">
+      <div v-if="compareList.length" class="cmp-fab" @click="showCompare = true">
+        <span class="cmp-fab-icon">⇄</span>
+        <span class="cmp-fab-text">对比 {{ compareList.length }}/2</span>
+      </div>
+    </transition>
+
+    <!-- Side-by-side compare dialog. -->
+    <van-dialog v-model:show="showCompare" :show-confirm-button="false" class="cmp-dialog">
+      <div class="cmp-head">
+        <span class="cmp-title">商品对比</span>
+        <van-icon name="cross" class="cmp-close" @click="showCompare = false" />
+      </div>
+      <div class="cmp-table">
+        <div class="cmp-col cmp-field-col">
+          <div class="cmp-cell cmp-cell-img"></div>
+          <div class="cmp-cell cmp-cell-field">商品</div>
+          <div class="cmp-cell cmp-cell-field">价格</div>
+          <div class="cmp-cell cmp-cell-field">原价</div>
+          <div class="cmp-cell cmp-cell-field">店铺</div>
+          <div class="cmp-cell cmp-cell-field">销量</div>
+          <div class="cmp-cell cmp-cell-field">库存</div>
+        </div>
+        <div v-for="(p, idx) in compareList" :key="p.id" class="cmp-col">
+          <div class="cmp-cell cmp-cell-img">
+            <van-image width="70" height="70" radius="6" :src="p.image" fit="cover" />
+          </div>
+          <div class="cmp-cell cmp-cell-val cmp-cell-name van-multi-ellipsis--l2">{{ p.name }}</div>
+          <div class="cmp-cell cmp-cell-val" :class="{ 'cmp-cheaper': cheaperIs(idx) }">¥{{ fmt(p.price) }}</div>
+          <div class="cmp-cell cmp-cell-val cmp-orig">¥{{ fmt(p.original_price) }}</div>
+          <div class="cmp-cell cmp-cell-val">{{ p.shop || '-' }}</div>
+          <div class="cmp-cell cmp-cell-val">{{ p.sales }}人付款</div>
+          <div class="cmp-cell cmp-cell-val">{{ p.stock }}件</div>
+        </div>
+        <!-- Placeholder column when only one product is selected. -->
+        <div v-if="compareList.length < 2" class="cmp-col cmp-empty">
+          <div class="cmp-cell cmp-cell-img cmp-placeholder">+</div>
+          <div class="cmp-cell cmp-cell-val cmp-placeholder-text">添加第二件</div>
+        </div>
+      </div>
+      <div class="cmp-actions">
+        <van-button plain block round @click="clearCompare">清空</van-button>
+        <van-button type="danger" block round @click="showCompare = false">关闭</van-button>
+      </div>
+    </van-dialog>
   </div>
 </template>
 
@@ -115,4 +207,37 @@ function fmt(n) {
 .prod-price { color: #e1251b; font-weight: bold; font-size: 16px; }
 .prod-sales { font-size: 11px; color: #999; }
 .loading { text-align: center; padding: 40px; }
+
+/* ---- Product compare ---- */
+.prod-row { position: relative; }
+.compare-btn { position: absolute; right: 8px; top: 8px; display: flex; align-items: center; gap: 3px; font-size: 11px; color: #888; padding: 3px 6px; border-radius: 10px; background: rgba(255,255,255,0.85); z-index: 2; }
+.cb-box { width: 14px; height: 14px; border: 1px solid #ccc; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; line-height: 1; }
+.cb-box.checked { background: #e1251b; border-color: #e1251b; }
+.prod-comparing { border-left: 3px solid #e1251b; box-shadow: inset 2px 0 0 #e1251b; }
+.prod-comparing .compare-btn { color: #e1251b; }
+
+/* Floating compare button */
+.cmp-fab { position: fixed; left: 50%; transform: translateX(-50%); bottom: 70px; background: #e1251b; color: #fff; border-radius: 999px; padding: 10px 22px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 14px rgba(225,37,27,0.4); z-index: 100; }
+.cmp-fab-icon { font-size: 18px; }
+.cmp-fade-enter-active, .cmp-fade-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.cmp-fade-enter-from, .cmp-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
+
+/* Compare dialog */
+.cmp-dialog { width: 94%; max-width: 420px; }
+.cmp-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 6px; }
+.cmp-title { font-size: 16px; font-weight: 600; }
+.cmp-close { font-size: 18px; color: #999; }
+.cmp-table { display: flex; overflow-x: auto; padding: 4px 12px 12px; }
+.cmp-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cmp-field-col { flex: 0 0 52px; }
+.cmp-cell { padding: 6px 4px; font-size: 12px; min-height: 40px; display: flex; align-items: center; }
+.cmp-cell-img { min-height: 82px; }
+.cmp-cell-field { color: #999; justify-content: flex-start; }
+.cmp-cell-val { color: #333; word-break: break-all; }
+.cmp-cell-name { line-height: 16px; }
+.cmp-orig { color: #999; text-decoration: line-through; }
+.cmp-cheaper { color: #e1251b; font-weight: 700; font-size: 15px; }
+.cmp-placeholder { width: 70px; height: 70px; border: 1px dashed #ddd; border-radius: 6px; color: #ccc; font-size: 28px; display: flex; align-items: center; justify-content: center; }
+.cmp-placeholder-text { color: #ccc; }
+.cmp-actions { display: flex; gap: 10px; padding: 0 16px 16px; }
 </style>
