@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { getSeckill, getProducts, getCategories } from '../api'
@@ -10,7 +10,56 @@ const products = ref([])
 const categories = ref([])
 const loading = ref(false)
 
+// ---- Flash sale countdown (首页限时抢购倒计时) ----
+// Counts down to the next top-of-hour. When it hits 0, briefly shows
+// "正在抢购中!" then resets the target to the following hour.
+const countdown = ref('00:00:00')
+const flashLive = ref(false) // true -> sale is "live" right now
+let flashTimer = null
+
+// Target is the next top-of-hour (e.g. 14:00:00).
+function nextTopOfHour(from = new Date()) {
+  const t = new Date(from)
+  t.setMinutes(0, 0, 0)
+  t.setHours(t.getHours() + 1)
+  return t.getTime()
+}
+
+let flashTarget = nextTopOfHour()
+
+function pad(n) {
+  return String(n).padStart(2, '0')
+}
+
+function tick() {
+  const diff = flashTarget - Date.now()
+  if (diff <= 0) {
+    // Sale just went live: show live state briefly, then reset target.
+    flashLive.value = true
+    countdown.value = '00:00:00'
+    setTimeout(() => {
+      flashLive.value = false
+      flashTarget = nextTopOfHour()
+      updateCountdown()
+    }, 5000)
+    return
+  }
+  flashLive.value = false
+  updateCountdown(diff)
+}
+
+function updateCountdown(diff = flashTarget - Date.now()) {
+  const d = Math.max(0, diff)
+  const h = Math.floor(d / 3600000)
+  const m = Math.floor((d % 3600000) / 60000)
+  const s = Math.floor((d % 60000) / 1000)
+  countdown.value = `${pad(h)}:${pad(m)}:${pad(s)}`
+}
+
 onMounted(async () => {
+  // Start the flash sale countdown ticker immediately.
+  tick()
+  flashTimer = setInterval(tick, 1000)
   loading.value = true
   try {
     const [sk, pl, cats] = await Promise.all([getSeckill(), getProducts({ page: 1, page_size: 20 }), getCategories()])
@@ -36,6 +85,16 @@ function goProduct(id) {
 function fmt(n) {
   return Number(n).toFixed(2)
 }
+
+// Split countdown into 3 monospace blocks for styling.
+const timeBlocks = computed(() => countdown.value.split(':'))
+
+onUnmounted(() => {
+  if (flashTimer) {
+    clearInterval(flashTimer)
+    flashTimer = null
+  }
+})
 </script>
 
 <template>
@@ -67,9 +126,25 @@ function fmt(n) {
       </div>
     </div>
 
+    <!-- Flash sale countdown banner (首页限时抢购倒计时) -->
+    <div class="flash-banner" :class="{ live: flashLive }">
+      <div class="fb-text">
+        <span class="fb-icon">⚡</span>
+        <span class="fb-title">限时秒杀</span>
+        <span class="fb-sub">{{ flashLive ? '正在抢购中!' : '距开抢还有' }}</span>
+      </div>
+      <div v-if="!flashLive" class="fb-countdown">
+        <span class="fb-block">{{ timeBlocks[0] }}</span>
+        <span class="fb-colon">:</span>
+        <span class="fb-block">{{ timeBlocks[1] }}</span>
+        <span class="fb-colon">:</span>
+        <span class="fb-block">{{ timeBlocks[2] }}</span>
+      </div>
+      <div v-else class="fb-live-tag">GO</div>
+    </div>
+
     <!-- Seckill floor -->
-    <div class="section">
-      <div class="section-head" @click="router.push('/seckill')" style="cursor:pointer">
+    <div class="section">      <div class="section-head" @click="router.push('/seckill')" style="cursor:pointer">
         <span class="jd-red"><van-icon name="clock-o" /> 京东秒杀</span>
         <span class="more">更多 ›</span>
       </div>
@@ -216,5 +291,91 @@ function fmt(n) {
 .loading {
   text-align: center;
   padding: 20px;
+}
+
+/* Flash sale countdown banner */
+.flash-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 8px 8px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #e1251b 0%, #ff4d4f 60%, #ff7a45 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(225, 37, 27, 0.3);
+  overflow: hidden;
+  position: relative;
+}
+.flash-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.06) 0,
+    rgba(255, 255, 255, 0.06) 12px,
+    transparent 12px,
+    transparent 24px
+  );
+  pointer-events: none;
+}
+.flash-banner.live {
+  background: linear-gradient(90deg, #ff4d4f 0%, #e1251b 100%);
+}
+.fb-text {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+.fb-icon {
+  font-size: 20px;
+}
+.fb-title {
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+.fb-sub {
+  font-size: 12px;
+  opacity: 0.92;
+  margin-left: 4px;
+}
+.fb-countdown {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  z-index: 1;
+}
+.fb-block {
+  display: inline-block;
+  min-width: 34px;
+  text-align: center;
+  padding: 6px 4px;
+  background: rgba(0, 0, 0, 0.28);
+  border-radius: 6px;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 22px;
+  font-weight: bold;
+  line-height: 1;
+}
+.fb-colon {
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 22px;
+  font-weight: bold;
+}
+.fb-live-tag {
+  font-size: 16px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  background: #fff;
+  color: #e1251b;
+  padding: 6px 14px;
+  border-radius: 20px;
+  position: relative;
+  z-index: 1;
 }
 </style>
