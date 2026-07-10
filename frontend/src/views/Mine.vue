@@ -2,13 +2,37 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getProfile, getCheckInStatus } from '../api'
+import { getProfile, getCheckInStatus, getOrders, listFavorites, getMyCoupons } from '../api'
 
 const router = useRouter()
 const user = ref(null)
 const cartCount = ref(0)
 const loggedIn = ref(false)
 const growthPoints = ref(0) // growth value derived from check-in points
+
+// ---- Quick stats dashboard (个人中心速览) ----
+// Counts shown at the top of the Mine page: orders, favorites, coupons, points.
+const stats = ref({ orders: 0, favorites: 0, coupons: 0, points: 0 })
+function goStat(path) {
+  router.push(path)
+}
+
+// ---- Dark mode (深色模式) ----
+// Mirror of the flag stored in App.vue; initialized from localStorage so the
+// switch reflects the real state on first render.
+const darkMode = ref(localStorage.getItem('jd_dark_mode') === 'true')
+function toggleDark(val) {
+  darkMode.value = val
+  localStorage.setItem('jd_dark_mode', String(val))
+  // Let App.vue apply the class + body bg.
+  if (window.__setJdDarkMode) window.__setJdDarkMode(val)
+  else {
+    const el = document.querySelector('.app-wrap')
+    if (el) el.classList.toggle('dark-mode', val)
+    document.body.classList.toggle('jd-dark', val)
+  }
+  showToast(val ? '已开启深色模式' : '已关闭深色模式')
+}
 
 // ---- Member level tiers (会员成长值等级) ----
 // Thresholds are cumulative growth points. Badges use the requested colors.
@@ -60,8 +84,32 @@ async function load() {
     } catch (_) {
       growthPoints.value = 0
     }
+    // Quick stats: fetch counts in parallel so a slow endpoint doesn't block.
+    loadStats()
   } catch (e) {
     loggedIn.value = false
+  }
+}
+
+// Fetch the four quick-stat counts. Failures leave the stat at 0 rather than
+// breaking the page.
+async function loadStats() {
+  try {
+    const [orders, favs, mine, ci] = await Promise.all([
+      getOrders().catch(() => []),
+      listFavorites().catch(() => []),
+      getMyCoupons().catch(() => []),
+      getCheckInStatus().catch(() => ({})),
+    ])
+    stats.value = {
+      orders: (orders || []).length,
+      favorites: (favs || []).length,
+      // "Unused" coupon count = coupons not yet redeemed/expired.
+      coupons: (mine || []).filter((c) => c && !c.used).length,
+      points: ci.total_points || 0,
+    }
+  } catch (_) {
+    // keep zeros
   }
 }
 onMounted(load)
@@ -93,6 +141,30 @@ function logout() {
           <div class="u-name">登录/注册</div>
           <div class="u-id">点击登录享受更多优惠</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Quick stats dashboard (个人中心速览) -->
+    <div class="quick-stats">
+      <div class="qs-card" @click="goStat('/orders')">
+        <van-icon name="orders-o" size="24" color="#e1251b" />
+        <div class="qs-num">{{ stats.orders }}</div>
+        <div class="qs-label">订单数</div>
+      </div>
+      <div class="qs-card" @click="goStat('/favorites')">
+        <van-icon name="star-o" size="24" color="#ff976a" />
+        <div class="qs-num">{{ stats.favorites }}</div>
+        <div class="qs-label">收藏数</div>
+      </div>
+      <div class="qs-card" @click="goStat('/coupons')">
+        <van-icon name="coupon-o" size="24" color="#f5a623" />
+        <div class="qs-num">{{ stats.coupons }}</div>
+        <div class="qs-label">优惠券数</div>
+      </div>
+      <div class="qs-card" @click="goStat('/checkin')">
+        <van-icon name="gem-o" size="24" color="#1989fa" />
+        <div class="qs-num">{{ stats.points }}</div>
+        <div class="qs-label">积分数</div>
       </div>
     </div>
 
@@ -177,6 +249,12 @@ function logout() {
       <van-cell title="收货地址" is-link icon="location-o" @click="router.push('/addresses')" />
       <van-cell title="编辑资料" is-link icon="edit" @click="router.push('/profile')" />
       <van-cell title="PLUS会员" is-link icon="diamond-o" @click="showToast('演示功能')" />
+      <!-- Dark mode toggle (深色模式) -->
+      <van-cell title="深色模式" icon="closed-eye">
+        <template #right-icon>
+          <van-switch :model-value="darkMode" @update:model-value="toggleDark" size="22px" />
+        </template>
+      </van-cell>
       <van-cell title="管理后台" is-link @click="router.push('/admin')" icon="setting-o" />
     </van-cell-group>
 
@@ -195,6 +273,34 @@ function logout() {
 .order-entries { display: flex; padding: 16px 0; }
 .oe-item { flex: 1; text-align: center; font-size: 12px; color: #666; }
 .oe-item span { display: block; margin-top: 4px; }
+
+/* ---- Quick stats dashboard (个人中心速览) ---- */
+.quick-stats {
+  display: flex;
+  margin: -16px 12px 12px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  position: relative;
+  z-index: 2;
+}
+.qs-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.qs-card:active { opacity: 0.6; }
+.qs-num {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  font-family: 'Courier New', monospace;
+}
+.qs-label { font-size: 11px; color: #999; }
 
 /* ---- Member growth section (会员成长值) ---- */
 .growth-card {

@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getCart, updateCart, deleteCart, createOrder, getProducts, addToCart } from '../api'
+import { getCart, updateCart, deleteCart, createOrder, getProducts, addToCart, toggleFavorite } from '../api'
 
 // ---- Group buy invite (好友拼单邀请) ----
 // A festive popup that generates shareable invite text for the current cart,

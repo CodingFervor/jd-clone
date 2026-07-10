@@ -14,3 +14,67 @@ img { display: block; }
 ul, li { list-style: none; }
 a { text-decoration: none; color: inherit; }
 .app-wrap { max-width: 750px; margin: 0 auto; min-height: 100vh; background: #f7f7f7; padding-bottom: 50px; }
+
+/* ---- Dark mode (深色模式) ---- */
+/* Applied as .dark-mode on .app-wrap and .jd-dark on <body>. Override key
+   surfaces (page bg, text, cards, inputs, vant cell groups) to dark variants.
+   Brand red is preserved for accents/prices. */
+body.jd-dark { background: #1a1a1a; color: #fff; }
+body.jd-dark .app-wrap { background: #1a1a1a; color: #fff; }
+
+.app-wrap.dark-mode {
+  background: #1a1a1a;
+  color: #fff;
+}
+.app-wrap.dark-mode .van-nav-bar,
+.app-wrap.dark-mode .van-search,
+.app-wrap.dark-mode .van-cell,
+.app-wrap.dark-mode .van-cell-group,
+.app-wrap.dark-mode .van-cell-group--inset,
+.app-wrap.dark-mode .van-popup,
+.app-wrap.dark-mode .van-tabs__nav {
+  background: #2a2a2a !important;
+  color: #fff !important;
+}
+.app-wrap.dark-mode .van-nav-bar__title,
+.app-wrap.dark-mode .van-nav-bar .van-icon,
+.app-wrap.dark-mode .van-cell__title,
+.app-wrap.dark-mode .van-cell__value,
+.app-wrap.dark-mode .van-cell .van-icon,
+.app-wrap.dark-mode .van-tab {
+  color: #fff !important;
+}
+.app-wrap.dark-mode .van-field__control,
+.app-wrap.dark-mode .van-search__content,
+.app-wrap.dark-mode input,
+.app-wrap.dark-mode textarea {
+  background: #333 !important;
+  color: #fff !important;
+}
+.app-wrap.dark-mode .van-search {
+  background: #2a2a2a !important;
+}
+.app-wrap.dark-mode .van-hairline--top-bottom::after,
+.app-wrap.dark-mode .van-cell::after,
+.app-wrap.dark-mode .van-hairline::after {
+  border-color: #444 !important;
+}
+.app-wrap.dark-mode .van-tag--default {
+  background: #444 !important;
+  color: #fff !important;
+}
+.app-wrap.dark-mode .van-tabbar,
+.app-wrap.dark-mode .van-submit-bar {
+  background: #2a2a2a !important;
+}
+.app-wrap.dark-mode .van-submit-bar__text,
+.app-wrap.dark-mode .van-submit-bar__price {
+  color: #fff !important;
+}
+.app-wrap.dark-mode .van-empty__description {
+  color: #aaa !important;
+}
+.app-wrap.dark-mode .van-button--default {
+  background: #333 !important;
+  color: #fff !important;
+}

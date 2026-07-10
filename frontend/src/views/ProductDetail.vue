@@ -184,6 +184,51 @@ const brandTags = computed(() => {
   }
   return picked
 })
+// Product Origin (产地溯源): a deterministic fake origin city chosen from a
+// fixed pool by product.id % 10. Each city carries its province prefix so the
+// cell can render "浙江·杭州". Clicking the cell opens a popup showing a
+// stylized route from the origin to the user.
+const ORIGIN_CITIES = [
+  { city: '北京', province: '北京' },
+  { city: '上海', province: '上海' },
+  { city: '广州', province: '广东' },
+  { city: '深圳', province: '广东' },
+  { city: '杭州', province: '浙江' },
+  { city: '成都', province: '四川' },
+  { city: '武汉', province: '湖北' },
+  { city: '西安', province: '陕西' },
+  { city: '南京', province: '江苏' },
+  { city: '重庆', province: '重庆' },
+]
+const origin = computed(() => {
+  const id = product.value ? Number(product.value.id) || 0 : 0
+  const entry = ORIGIN_CITIES[id % ORIGIN_CITIES.length]
+  return entry
+})
+const originLabel = computed(() => {
+  const o = origin.value
+  return o ? `${o.province}·${o.city}` : ''
+})
+const showOrigin = ref(false)
+// Purchase Note Templates (购买须知): three templated notes shown in a
+// collapsible section above the brand story. The start index is rotated by the
+// product id so the same product always shows the notes in the same order,
+// while different products present them differently.
+const PURCHASE_NOTES = [
+  '本品支持7天无理由退货',
+  '颜色可能因屏幕显示略有差异',
+  '请确认规格后下单，拆封后不支持退换',
+]
+const purchaseNotesCollapsed = ref(true)
+const purchaseNotes = computed(() => {
+  const id = product.value ? Number(product.value.id) || 0 : 0
+  const start = id % PURCHASE_NOTES.length
+  const out = []
+  for (let i = 0; i < PURCHASE_NOTES.length; i++) {
+    out.push(PURCHASE_NOTES[(start + i) % PURCHASE_NOTES.length])
+  }
+  return out
+})
 async function onUploadReviewImage(item) {
   try {
     const res = await uploadImage(item.file)
@@ -570,6 +615,11 @@ function priceTrend() {
           <van-switch :model-value="restockSubscribed" size="20" @click.stop="toggleRestock" active-color="#e1251b" />
         </template>
       </van-cell>
+      <van-cell title="📍 产地溯源" is-link @click="showOrigin = true">
+        <template #value>
+          <span class="origin-value">📍 {{ originLabel }}</span>
+        </template>
+      </van-cell>
     </van-cell-group>
     <!-- Price history (比价历史) -->
     <div v-if="priceHistory.length" class="price-history">
@@ -590,6 +640,19 @@ function priceTrend() {
         <div v-for="(b, i) in priceBars()" :key="i" class="ph-bar-col">
           <div class="ph-bar" :style="{ height: b.height + '%' }"></div>
           <span class="ph-date">{{ b.date }}</span>
+        </div>
+      </div>
+    </div>
+    <!-- Purchase Note Templates (购买须知) -->
+    <div class="purchase-notes">
+      <div class="pn-head" @click="purchaseNotesCollapsed = !purchaseNotesCollapsed">
+        <span>📋 购买须知</span>
+        <span class="pn-toggle">{{ purchaseNotesCollapsed ? '展开' : '收起' }} <van-icon :name="purchaseNotesCollapsed ? 'arrow-down' : 'arrow-up'" /></span>
+      </div>
+      <div v-show="!purchaseNotesCollapsed" class="pn-body">
+        <div v-for="(note, i) in purchaseNotes" :key="i" class="pn-item">
+          <span class="pn-check">✓</span>
+          <span class="pn-text">{{ note }}</span>
         </div>
       </div>
     </div>
@@ -650,6 +713,32 @@ function priceTrend() {
         <van-button type="danger" block round @click="submitPriceAlert" style="margin-top:12px">
           {{ priceAlert ? '更新提醒' : '开启提醒' }}
         </van-button>
+      </div>
+    </van-popup>
+
+    <!-- Product origin route popup (产地溯源) -->
+    <van-popup v-model:show="showOrigin" round closeable position="bottom" :style="{ width: '88%' }">
+      <div class="origin-box">
+        <h3 class="origin-title">📍 产地溯源</h3>
+        <div class="origin-route">
+          <div class="or-point or-start">
+            <div class="or-icon">📍</div>
+            <div class="or-name">{{ originLabel }}</div>
+            <div class="or-sub">产地直发</div>
+          </div>
+          <div class="or-track">
+            <span class="or-truck">🚚</span>
+            <div class="or-line"></div>
+            <div class="or-dots"><span></span><span></span><span></span></div>
+          </div>
+          <div class="or-point or-end">
+            <div class="or-icon">🏠</div>
+            <div class="or-name">您</div>
+            <div class="or-sub">送货上门</div>
+          </div>
+        </div>
+        <p class="origin-desc">本商品由 <b>{{ originLabel }}</b> 产地直发，全程冷链运输，新鲜直达您手中。</p>
+        <van-button block type="danger" round @click="showOrigin = false" style="margin-top: 12px">知道了</van-button>
       </div>
     </van-popup>
 
@@ -834,6 +923,30 @@ function priceTrend() {
 /* Eco score badge (环保评分) */
 .eco-title { display: inline-flex; align-items: center; gap: 4px; }
 .eco-value { font-weight: bold; }
+/* Product origin cell (产地溯源) */
+.origin-value { color: #e1251b; font-weight: 500; }
+.origin-box { padding: 20px; }
+.origin-title { text-align: center; font-size: 16px; margin-bottom: 18px; }
+.origin-route { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 8px 4px 12px; }
+.or-point { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; }
+.or-icon { font-size: 30px; line-height: 1; }
+.or-name { font-size: 14px; font-weight: bold; color: #333; }
+.or-sub { font-size: 11px; color: #999; }
+.or-track { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; height: 30px; }
+.or-truck { position: absolute; font-size: 18px; z-index: 1; }
+.or-line { position: absolute; left: 0; right: 0; top: 50%; height: 3px; background: repeating-linear-gradient(90deg, #e1251b 0, #e1251b 6px, transparent 6px, transparent 12px); transform: translateY(-50%); }
+.or-dots { position: absolute; right: -2px; display: flex; gap: 2px; }
+.or-dots span { width: 4px; height: 4px; border-radius: 50%; background: #e1251b; opacity: 0.6; }
+.origin-desc { font-size: 13px; color: #666; line-height: 20px; text-align: center; margin-top: 10px; }
+.origin-desc b { color: #e1251b; }
+/* Purchase Note Templates (购买须知) */
+.purchase-notes { background: #fff; margin-top: 8px; padding: 12px 16px; }
+.pn-head { display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: bold; }
+.pn-toggle { font-size: 13px; font-weight: normal; color: #e1251b; display: inline-flex; align-items: center; gap: 2px; }
+.pn-body { padding-top: 10px; }
+.pn-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; }
+.pn-check { color: #07c160; font-weight: bold; flex-shrink: 0; line-height: 20px; }
+.pn-text { font-size: 13px; color: #666; line-height: 20px; }
 .desc, .reviews { background: #fff; margin-top: 8px; padding: 12px 16px; }
 /* Brand Story (品牌故事) */
 .brand-story { background: #fff; margin-top: 8px; padding: 12px 16px; }

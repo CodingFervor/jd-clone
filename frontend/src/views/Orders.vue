@@ -159,6 +159,43 @@ function parseItems(json) {
     return []
   }
 }
+// Order export (订单导出): build a text summary of every order and copy it to
+// the clipboard. Each order's line items are joined into one "商品" cell.
+async function exportOrders() {
+  if (!orders.value.length) {
+    showToast('暂无订单可导出')
+    return
+  }
+  const header = '订单号 | 金额 | 状态 | 商品'
+  const lines = [header]
+  for (const o of orders.value) {
+    const items = parseItems(o.items_json)
+    const goods = items.length
+      ? items.map((it) => `${it.name} x${it.quantity}`).join(', ')
+      : '-'
+    lines.push(`${o.order_no} | ¥${fmt(o.total)} | ${statusText(o.status)} | ${goods}`)
+  }
+  const text = lines.join('\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    showSuccessToast('订单已导出并复制到剪贴板')
+  } catch (e) {
+    // Fallback for non-secure contexts without the async clipboard API.
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try {
+      document.execCommand('copy')
+      showSuccessToast('订单已导出并复制到剪贴板')
+    } catch {
+      showToast('复制失败，请手动复制')
+    }
+    document.body.removeChild(ta)
+  }
+}
 
 // Resolve a grouping key for an order line. Prefer an explicit `shop` field
 // when the backend stores one; otherwise fall back to the brand/name prefix
@@ -233,7 +270,11 @@ function orderStages(o) {
 
 <template>
   <div class="orders-page">
-    <van-nav-bar title="我的订单" left-arrow @click-left="router.back()" fixed placeholder />
+    <van-nav-bar title="我的订单" left-arrow @click-left="router.back()" fixed placeholder>
+      <template #right>
+        <span class="export-btn" @click="exportOrders">📋 导出</span>
+      </template>
+    </van-nav-bar>
     <div v-if="loading" class="loading"><van-loading /></div>
     <van-empty v-else-if="!orders.length" description="暂无订单" />
     <div v-else class="order-list">
@@ -299,6 +340,7 @@ function orderStages(o) {
 <style scoped>
 .orders-page { min-height: 100vh; }
 .loading { text-align: center; padding: 80px; }
+.export-btn { font-size: 14px; color: #e1251b; font-weight: 500; }
 .order-card { background: #fff; margin: 8px; border-radius: 8px; padding: 12px; }
 .o-head { display: flex; justify-content: space-between; font-size: 12px; color: #999; margin-bottom: 8px; }
 .o-status { color: #e1251b; }
