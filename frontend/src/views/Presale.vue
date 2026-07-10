@@ -24,6 +24,42 @@ function fmtRemain(ms) {
   const m = Math.floor((ms % 3600000) / 60000)
   return `${h}时${m}分`
 }
+// Feature 4: 定金期倒计时格式 X天X时X分
+function fmtDayHourMin(ms) {
+  const d = Math.floor(ms / 86400000)
+  const h = Math.floor((ms % 86400000) / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  return `${d}天${h}时${m}分`
+}
+// 尾款开始时间格式 X月X日
+function fmtBalanceDate(d) {
+  const dt = new Date(d.balance_start)
+  return `${dt.getMonth() + 1}月${dt.getDate()}日`
+}
+// Feature 4: 阶段判定 — deposit(定金期) / gap(间隔期) / balance(尾款期) / done(已完成)
+const DEPOSIT_WINDOW_DAYS = 3 // demo: 假设定金期为 3 天
+function currentStage(d) {
+  const t = now.value
+  const depEnd = new Date(d.deposit_end).getTime()
+  const balStart = new Date(d.balance_start).getTime()
+  if (d.status && d.status !== 'active') return 'done'
+  if (t >= balStart) return 'balance'
+  if (t >= depEnd) return 'gap'
+  return 'deposit'
+}
+// 定金期是否在前 24 小时内 (demo 逻辑: depositStart = depositEnd - 定金期)
+function isDoubleDeposit(d) {
+  const depEnd = new Date(d.deposit_end).getTime()
+  const depStart = depEnd - DEPOSIT_WINDOW_DAYS * 86400000
+  const t = now.value
+  return t >= depStart && t < depStart + 86400000 && t < depEnd
+}
+const STAGES = [
+  { key: 'deposit', label: '定金期' },
+  { key: 'gap', label: '间隔期' },
+  { key: 'balance', label: '尾款期' },
+  { key: 'done', label: '已完成' }
+]
 function savePct(d) {
   if (!d.original_price || d.original_price <= d.final_price) return 0
   return Math.round((1 - d.final_price / d.original_price) * 100)
@@ -57,9 +93,23 @@ function fmt(n) { return Number(n).toFixed(2) }
             <van-tag type="danger" round v-if="savePct(d) > 0">省{{ savePct(d) }}%</van-tag>
           </div>
           <div class="pc-deposit">定金 ¥{{ fmt(d.deposit) }} · 尾款 ¥{{ fmt(d.balance) }}</div>
+          <!-- Feature 4: 阶段指示器 -->
+          <div class="pc-stages">
+            <template v-for="(stg, idx) in STAGES" :key="stg.key">
+              <span class="ps-stage" :class="{ 'ps-active': currentStage(d) === stg.key }">{{ stg.label }}</span>
+              <span v-if="idx < STAGES.length - 1" class="ps-arrow">→</span>
+            </template>
+          </div>
           <div class="pc-bottom">
-            <span class="pc-countdown">⏰ 定金截止 {{ fmtRemain(remainMs(d)) }}</span>
-            <van-button size="small" type="danger" round @click="payDeposit(d)">付定金</van-button>
+            <div class="pc-countdown-wrap">
+              <span v-if="currentStage(d) === 'deposit'" class="pc-countdown">⏰ 定金还剩 {{ fmtDayHourMin(remainMs(d)) }}</span>
+              <span v-else-if="currentStage(d) === 'gap'" class="pc-countdown pc-countdown--wait">尾款开始 {{ fmtBalanceDate(d) }}</span>
+              <span v-else-if="currentStage(d) === 'balance'" class="pc-countdown pc-countdown--balance">尾款支付中 · {{ fmtBalanceDate(d) }}</span>
+              <span v-else class="pc-countdown pc-countdown--done">活动已结束</span>
+              <span v-if="currentStage(d) !== 'deposit' && currentStage(d) !== 'done'" class="pc-balance-date">尾款开始 {{ fmtBalanceDate(d) }}</span>
+              <van-tag v-if="isDoubleDeposit(d)" type="warning" round class="pc-double">定金翻倍</van-tag>
+            </div>
+            <van-button size="small" type="danger" round :disabled="currentStage(d) !== 'deposit'" @click="payDeposit(d)">付定金</van-button>
           </div>
         </div>
       </div>
@@ -78,6 +128,17 @@ function fmt(n) { return Number(n).toFixed(2) }
 .pc-final { color: #e1251b; font-size: 20px; font-weight: bold; }
 .pc-origin { color: #999; font-size: 12px; text-decoration: line-through; }
 .pc-deposit { font-size: 12px; color: #666; margin-bottom: 6px; }
+/* Feature 4: 阶段指示器 */
+.pc-stages { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin-bottom: 8px; }
+.ps-stage { font-size: 10px; padding: 2px 6px; border-radius: 8px; background: #f2f3f5; color: #999; }
+.ps-stage.ps-active { background: #e1251b; color: #fff; font-weight: bold; }
+.ps-arrow { font-size: 10px; color: #ccc; margin: 0 1px; }
 .pc-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
-.pc-countdown { color: #e1251b; font-size: 12px; }
+.pc-countdown-wrap { display: flex; flex-direction: column; gap: 2px; }
+.pc-countdown { color: #e1251b; font-size: 12px; font-weight: bold; }
+.pc-countdown--wait { color: #ff9800; }
+.pc-countdown--balance { color: #07c160; }
+.pc-countdown--done { color: #999; }
+.pc-balance-date { font-size: 11px; color: #999; }
+.pc-double { margin-top: 2px; align-self: flex-start; }
 </style>
