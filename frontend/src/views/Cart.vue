@@ -140,6 +140,29 @@ async function removeItem(item) {
     showSuccessToast('已删除')
   } catch (e) {}
 }
+
+// ---- Swipe cell actions (购物车滑动操作) ----
+// Right swipe reveals 收藏 (favorite) + 删除 (delete).
+// Left swipe reveals 移至收藏夹 (favorite then remove from cart).
+async function swipeFavorite(it) {
+  try {
+    await toggleFavorite(it.product_id)
+    showSuccessToast('已加入收藏')
+  } catch (e) {
+    showToast(e.response?.data?.error || '收藏失败')
+  }
+}
+// Move to favorites: favorite the product, then delete it from the cart.
+async function moveToFavorite(it) {
+  try {
+    await toggleFavorite(it.product_id)
+    await deleteCart(it.id)
+    await load()
+    showSuccessToast('已移至收藏夹')
+  } catch (e) {
+    showToast(e.response?.data?.error || '操作失败')
+  }
+}
 async function toggleAll() {
   const target = allSelected.value ? 0 : 1
   for (const it of items.value) {
@@ -219,7 +242,11 @@ function isPriceDrop(it) {
         </div>
       </div>
 
-      <div v-for="it in items" :key="it.id" class="cart-item">
+      <van-swipe-cell v-for="it in items" :key="it.id">
+        <template #left>
+          <div class="swipe-left-btn" @click="moveToFavorite(it)">移至收藏夹</div>
+        </template>
+        <div class="cart-item">
           <van-checkbox :model-value="it.selected === 1" @click="toggleSelect(it)" />
           <van-image width="80" height="80" radius="6" :src="it.product_image" fit="cover" @click="router.push('/product/' + it.product_id)" />
           <div class="ci-info">
@@ -234,6 +261,11 @@ function isPriceDrop(it) {
             </div>
           </div>
         </div>
+        <template #right>
+          <div class="swipe-right-fav" @click="swipeFavorite(it)">收藏</div>
+          <div class="swipe-right-del" @click="removeItem(it)">删除</div>
+        </template>
+      </van-swipe-cell>
 
       <div class="invite-row">
         <van-button class="invite-btn" round size="small" icon="friends-o" @click="openInvite">
@@ -275,6 +307,43 @@ function isPriceDrop(it) {
 .cart-page { padding-bottom: 60px; }
 .loading { text-align: center; padding: 80px; }
 .cart-item { display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border-bottom: 1px solid #f5f5f5; }
+/* ---- Swipe cell action buttons (购物车滑动操作) ---- */
+.swipe-left-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 18px;
+  font-size: 13px;
+  color: #fff;
+  background: linear-gradient(135deg, #ffb74d, #ff9800);
+  white-space: nowrap;
+}
+.swipe-left-btn:active { opacity: 0.85; }
+.swipe-right-fav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 18px;
+  font-size: 13px;
+  color: #fff;
+  background: #ff9800;
+  white-space: nowrap;
+}
+.swipe-right-fav:active { opacity: 0.85; }
+.swipe-right-del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 18px;
+  font-size: 13px;
+  color: #fff;
+  background: #e1251b;
+  white-space: nowrap;
+}
+.swipe-right-del:active { opacity: 0.85; }
 .ci-info { flex: 1; }
 .ci-name { font-size: 13px; line-height: 18px; height: 36px; }
 .ci-name .drop-tag { vertical-align: middle; margin-right: 4px; }

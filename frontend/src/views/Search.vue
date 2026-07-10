@@ -13,6 +13,70 @@ const searched = ref(false)
 const suggestions = ref([])
 const focused = ref(false)
 
+// ---- Voice search (语音搜索) ----
+// Uses the Web Speech API when available. While listening the mic icon pulses.
+const listening = ref(false)
+let recognition = null
+
+function isSpeechSupported() {
+  return typeof window !== 'undefined' &&
+    !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+}
+
+function startVoice() {
+  if (!isSpeechSupported()) {
+    showToast('当前浏览器不支持语音搜索')
+    return
+  }
+  // If already listening, stop instead of starting a second session.
+  if (listening.value && recognition) {
+    recognition.stop()
+    return
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  recognition = new SR()
+  recognition.lang = 'zh-CN'
+  recognition.interimResults = false
+  recognition.maxAlternatives = 1
+  recognition.onstart = () => {
+    listening.value = true
+  }
+  recognition.onend = () => {
+    listening.value = false
+  }
+  recognition.onerror = (ev) => {
+    listening.value = false
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+      showToast('请允许麦克风权限')
+    } else if (ev.error !== 'no-speech' && ev.error !== 'aborted') {
+      showToast('语音识别失败')
+    }
+  }
+  recognition.onresult = (ev) => {
+    const text = ev.results?.[0]?.[0]?.transcript || ''
+    if (text.trim()) {
+      keyword.value = text.trim()
+      // Auto-run the search with the recognized text.
+      doSearch(keyword.value)
+    }
+  }
+  try {
+    recognition.start()
+  } catch (e) {
+    listening.value = false
+    showToast('语音启动失败')
+  }
+}
+
+onUnmounted(() => {
+  if (suggestTimer) clearTimeout(suggestTimer)
+  // Clean up any active recognition session when leaving the page.
+  if (recognition) {
+    try { recognition.stop() } catch (_) {}
+    recognition = null
+  }
+})
+
 // Popular search terms (hot searches). Used as clickable tags above results.
 const hotSearches = ['iPhone 15', '华为', '空调', '笔记本', '球鞋', '扫地机器人', '蓝牙耳机', '冰箱']
 
@@ -92,9 +156,6 @@ onMounted(() => {
     doSearch(String(q).trim())
   }
 })
-onUnmounted(() => {
-  if (suggestTimer) clearTimeout(suggestTimer)
-})
 
 function fmt(n) {
   return Number(n).toFixed(2)
@@ -114,6 +175,14 @@ function fmt(n) {
         @focus="onFocus"
         @blur="onBlur"
       >
+        <template #left-icon>
+          <span
+            class="voice-btn"
+            :class="{ pulsing: listening }"
+            @mousedown.prevent="startVoice"
+            title="语音搜索"
+          >🎤</span>
+        </template>
         <template #action>
           <span @click="doSearch(keyword)">搜索</span>
         </template>
@@ -189,6 +258,28 @@ function fmt(n) {
 
 <style scoped>
 .search-page { min-height: 100vh; }
+/* ---- Voice search mic button (语音搜索) ---- */
+.voice-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  padding: 0 4px;
+  transition: transform 0.15s ease;
+}
+.voice-btn:active { transform: scale(1.2); }
+/* Pulsing animation while listening. */
+.voice-btn.pulsing {
+  color: #e1251b;
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
 .suggest-list { background: #fff; border-top: 1px solid #eee; }
 .suggest-item {
   padding: 10px 16px;
