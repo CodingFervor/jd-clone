@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showSuccessToast } from 'vant'
+import { showToast, showSuccessToast, showConfirmDialog } from 'vant'
 import { getCart, updateCart, deleteCart, createOrder, getProducts, addToCart, toggleFavorite, getTieredDiscounts } from '../api'
 
 // ---- Group buy invite (好友拼单邀请) ----
@@ -280,6 +280,76 @@ async function loadTiers() {
     tiersLoaded.value = false
   }
 }
+
+// ---- Shake to Undo (摇一摇撤销) ----
+// Detects a phone shake via DeviceMotionEvent. When a shake above the
+// threshold is registered, prompt the user to re-fetch the cart (restoring
+// any recently deleted items). On iOS 13+, the permission must be requested
+// first via a user gesture; otherwise the motion data is never delivered.
+const SHAKE_THRESHOLD = 25 // m/s^2 on any axis (重力加速度阈值)
+const SHAKE_INTERVAL = 1000 // min ms between two shake triggers
+let lastShakeAt = 0
+
+function onDeviceMotion(e) {
+  const acc = e.accelerationIncludingGravity
+  if (!acc) return
+  // accelerationIncludingGravity may report null values on some browsers;
+  // bail out if the axis data isn't usable.
+  if (acc.x == null && acc.y == null && acc.z == null) return
+  const mag = Math.max(Math.abs(acc.x || 0), Math.abs(acc.y || 0), Math.abs(acc.z || 0))
+  if (mag < SHAKE_THRESHOLD) return
+  const now = Date.now()
+  if (now - lastShakeAt < SHAKE_INTERVAL) return
+  lastShakeAt = now
+  triggerShakeUndo()
+}
+
+// Re-fetch the cart data to restore deleted items (server round-trip).
+function restoreCart() {
+  load()
+  showSuccessToast('已恢复购物车')
+}
+
+function triggerShakeUndo() {
+  showConfirmDialog({
+    title: '摇一摇撤销',
+    message: '摇一摇撤销删除？',
+    confirmButtonText: '撤销',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#e1251b',
+  })
+    .then(() => restoreCart())
+    .catch(() => {})
+}
+
+// Begin listening for motion events. On iOS 13+, requestPermission must be
+// called from a user gesture, so the listener is wired inside the resolver.
+async function enableShake() {
+  try {
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+      // iOS 13+: request permission via a user gesture.
+      const res = await DeviceMotionEvent.requestPermission()
+      if (res === 'granted') {
+        window.addEventListener('devicemotion', onDeviceMotion)
+        showSuccessToast('摇一摇已开启')
+      } else {
+        showToast('摇一摇功能需要授权')
+      }
+    } else if (typeof DeviceMotionEvent !== 'undefined') {
+      // Android / other: just attach.
+      window.addEventListener('devicemotion', onDeviceMotion)
+      showSuccessToast('摇一摇已开启')
+    } else {
+      showToast('摇一摇功能需要授权')
+    }
+  } catch (e) {
+    showToast('摇一摇功能需要授权')
+  }
+}
+
+onUnmounted(() => {
+  window.removeEventListener('devicemotion', onDeviceMotion)
+})
 </script>
 
 <template>
@@ -401,6 +471,12 @@ async function loadTiers() {
         </div>
       </div>
     </van-popup>
+
+    <!-- Shake to Undo hint (摇一摇撤销) -->
+    <div class="shake-hint" @click="enableShake">
+      <span class="shake-icon">📳</span>
+      <span class="shake-text">摇一摇撤销</span>
+    </div>
   </div>
 </template>
 
@@ -581,4 +657,36 @@ async function loadTiers() {
 }
 .invite-actions { display: flex; flex-direction: column; gap: 10px; }
 .ia-btn { font-weight: 600; }
+
+/* Shake to Undo hint (摇一摇撤销) */
+.shake-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 12px auto 4px;
+  padding: 6px 16px;
+  align-self: center;
+  font-size: 12px;
+  color: #999;
+  background: #f7f8fa;
+  border: 1px dashed #dcdfe6;
+  border-radius: 20px;
+  cursor: pointer;
+  width: fit-content;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.shake-hint:active { color: #e1251b; border-color: #e1251b; }
+.shake-icon {
+  font-size: 14px;
+  display: inline-block;
+  animation: shake-wobble 2.5s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes shake-wobble {
+  0%, 80%, 100% { transform: rotate(0deg); }
+  85% { transform: rotate(-18deg); }
+  90% { transform: rotate(18deg); }
+  95% { transform: rotate(-12deg); }
+}
 </style>

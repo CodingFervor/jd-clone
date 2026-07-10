@@ -443,6 +443,51 @@ async function copyShareLink() {
     showToast('复制失败，请手动复制')
   }
 }
+
+// ---- Share long image (分享长图) ----
+// Builds a CSS "long card" preview inside the share poster popup and offers
+// a "保存图片" action that, since we can't easily do real canvas capture
+// here, copies a formatted text summary of the product instead.
+const showLongImage = ref(false)
+// Key specs surfaced on the long card: shop, sales, tags, delivery, origin.
+const longCardSpecs = computed(() => {
+  if (!product.value) return []
+  const specs = []
+  specs.push({ label: '店铺', value: product.value.shop || '京东自营' })
+  specs.push({ label: '销量', value: (product.value.sales || 0) + '人付款' })
+  specs.push({ label: '标签', value: product.value.tags || '京东自营' })
+  specs.push({ label: '送达', value: deliveryEstimate.value || '极速达' })
+  if (originLabel.value) specs.push({ label: '产地', value: originLabel.value })
+  return specs
+})
+
+// Copy the formatted product summary: "🔥 商品名 | 现价¥X 原价¥Y | 京东自营".
+async function copyProductInfo() {
+  const name = product.value ? product.value.name : ''
+  const cur = fmt(currentPrice())
+  const orig = product.value ? fmt(product.value.original_price) : '0.00'
+  const tag = product.value && product.value.tags ? product.value.tags : '京东自营'
+  const text = `🔥 ${name} | 现价¥${cur} 原价¥${orig} | ${tag}`
+  try {
+    await navigator.clipboard.writeText(text)
+    showSuccessToast('已复制商品信息')
+  } catch (e) {
+    // Fallback for non-secure contexts / older browsers.
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try {
+      document.execCommand('copy')
+      showSuccessToast('已复制商品信息')
+    } catch (_) {
+      showToast('复制失败，请手动复制')
+    }
+    document.body.removeChild(ta)
+  }
+}
 async function toggleRestock() {
   if (!checkLogin()) return
   try {
@@ -934,7 +979,52 @@ onUnmounted(() => {
           </div>
           <div class="pc-brand">京东 JD.COM</div>
         </div>
-        <van-button block type="danger" round style="margin-top: 12px" @click="copyShareLink">复制分享链接</van-button>
+        <van-button block plain type="danger" round icon="description" style="margin-top: 12px" @click="showLongImage = true">📋生成长图</van-button>
+        <van-button block type="danger" round style="margin-top: 8px" @click="copyShareLink">复制分享链接</van-button>
+
+        <!-- Share long image (分享长图) -->
+        <div v-if="showLongImage" class="long-img-wrap">
+          <div class="li-head">
+            <span>长图预览</span>
+            <span class="li-close" @click="showLongImage = false">收起</span>
+          </div>
+          <div class="long-img-scroll">
+            <div class="long-card">
+              <div class="lc-top-bar">
+                <span class="lc-logo">JD</span>
+                <span class="lc-top-name">京东</span>
+                <span class="lc-tag">自营</span>
+              </div>
+              <van-image width="100%" height="220" radius="8" :src="product.image" fit="cover" />
+              <div class="lc-name van-multi-ellipsis--l2">{{ product.name }}</div>
+              <p v-if="product.subtitle" class="lc-sub">{{ product.subtitle }}</p>
+              <div class="lc-price-row">
+                <span class="lc-price">¥{{ fmt(currentPrice()) }}</span>
+                <span class="lc-origin">¥{{ fmt(product.original_price) }}</span>
+              </div>
+              <div v-if="product.vip_price > 0 && product.vip_price < currentPrice()" class="lc-vip">
+                <span class="lc-vip-badge">PLUS</span>
+                <span class="lc-vip-price">会员价 ¥{{ fmt(product.vip_price) }}</span>
+              </div>
+              <div class="lc-specs">
+                <div v-for="(sp, i) in longCardSpecs" :key="i" class="lc-spec-row">
+                  <span class="lc-spec-label">{{ sp.label }}</span>
+                  <span class="lc-spec-value">{{ sp.value }}</span>
+                </div>
+              </div>
+              <div class="lc-footer">
+                <div class="lc-qr">
+                  <div class="qr-grid">
+                    <div v-for="n in 64" :key="n" class="qr-cell" :class="{ on: qrPattern(n) }"></div>
+                  </div>
+                  <div class="lc-qr-text">长按识别</div>
+                </div>
+                <div class="lc-watermark">JD 京东</div>
+              </div>
+            </div>
+          </div>
+          <van-button block type="danger" round icon="records" style="margin-top: 10px" @click="copyProductInfo">保存图片</van-button>
+        </div>
       </div>
     </van-popup>
 
@@ -1162,6 +1252,101 @@ onUnmounted(() => {
 .qr-cell.on { background: #333; }
 .qr-text { font-size: 11px; color: #999; margin-top: 6px; }
 .pc-brand { color: #e1251b; font-size: 13px; font-weight: bold; margin-top: 12px; }
+
+/* Share long image (分享长图) */
+.long-img-wrap { margin-top: 16px; }
+.li-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+.li-close { font-size: 12px; font-weight: normal; color: #e1251b; cursor: pointer; }
+.long-img-scroll {
+  max-height: 60vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 4px;
+}
+.long-card {
+  background: linear-gradient(180deg, #fff5f5 0%, #fff 30%);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lc-top-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lc-logo {
+  color: #fff;
+  background: #e1251b;
+  font-weight: bold;
+  font-size: 13px;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.lc-top-name { font-size: 15px; font-weight: bold; color: #333; }
+.lc-tag {
+  font-size: 10px;
+  color: #e1251b;
+  border: 1px solid #e1251b;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.lc-name { font-size: 16px; line-height: 22px; color: #333; font-weight: 600; }
+.lc-sub { font-size: 12px; color: #999; line-height: 18px; margin-top: -4px; }
+.lc-price-row { display: flex; align-items: baseline; gap: 10px; }
+.lc-price { color: #e1251b; font-size: 28px; font-weight: bold; }
+.lc-origin { color: #999; text-decoration: line-through; font-size: 14px; }
+.lc-vip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(90deg, #ffd700, #ffaa00);
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  color: #6b4a00;
+}
+.lc-vip-badge { font-weight: bold; color: #5a3d00; }
+.lc-specs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.lc-spec-row { display: flex; font-size: 13px; line-height: 20px; }
+.lc-spec-label { width: 48px; color: #999; flex-shrink: 0; }
+.lc-spec-value { color: #333; flex: 1; }
+.lc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 12px;
+  margin-top: 4px;
+}
+.lc-qr { display: flex; flex-direction: column; align-items: center; }
+.lc-qr-text { font-size: 10px; color: #999; margin-top: 4px; }
+.lc-watermark {
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  color: #e1251b;
+  opacity: 0.85;
+}
+
 .related-section { background: #fff; margin-top: 8px; padding: 12px 16px; }
 .rs-head { font-size: 15px; font-weight: bold; margin-bottom: 10px; }
 .rs-scroll { display: flex; gap: 10px; overflow-x: auto; }

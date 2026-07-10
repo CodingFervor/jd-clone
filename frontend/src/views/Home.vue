@@ -141,6 +141,28 @@ function goTag(tag) {
   router.push({ path: '/search', query: { q: tag } })
 }
 
+// ---- Auto-scroll promo marquee (首页跑马灯) ----
+// Five promotional messages scrolled horizontally below the flash banner.
+// Each entry carries the display text (without the emoji prefix) and a longer
+// detail string shown in a toast when the bar is tapped.
+const marqueeMessages = [
+  { text: '满199减15', detail: '🎉 满199减15：下单满199元立减15元，部分商品专享' },
+  { text: '全国包邮', detail: '📦 全国包邮：所有实物商品全国包邮（偏远地区除外）' },
+  { text: '限时秒杀进行中', detail: '⚡ 限时秒杀进行中：整点开抢，低至5折，手慢无！' },
+  { text: '新人专享礼包', detail: '🎁 新人专享礼包：新用户登录即领188元大礼包' },
+  { text: 'PLUS会员95折', detail: '💎 PLUS会员95折：PLUS会员专享全场自营商品95折' },
+]
+// The continuously scrolling track content: messages joined by • dots.
+const marqueeTrack = marqueeMessages.map((m) => m.text).join('  •  ')
+
+// Tapping the marquee shows the detail of a (rotating) message in a toast.
+const marqueeIdx = ref(0)
+function onMarqueeTap() {
+  const m = marqueeMessages[marqueeIdx.value % marqueeMessages.length]
+  marqueeIdx.value += 1
+  showToast(m.detail)
+}
+
 onUnmounted(() => {
   if (flashTimer) {
     clearInterval(flashTimer)
@@ -193,6 +215,14 @@ onUnmounted(() => {
         <span class="fb-block">{{ timeBlocks[2] }}</span>
       </div>
       <div v-else class="fb-live-tag">GO</div>
+    </div>
+
+    <!-- Auto-scroll promo marquee (首页跑马灯) -->
+    <div class="marquee-bar" @click="onMarqueeTap">
+      <span class="mb-icon">📣</span>
+      <div class="mb-viewport">
+        <span class="mb-track">{{ marqueeTrack }}</span>
+      </div>
     </div>
 
     <!-- Seckill floor -->
@@ -574,6 +604,38 @@ onUnmounted(() => {
   border-radius: 20px;
   position: relative;
   z-index: 1;
+}
+
+/* Auto-scroll promo marquee (首页跑马灯) */
+.marquee-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px 8px;
+  padding: 8px 12px;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+}
+.mb-icon { font-size: 16px; flex-shrink: 0; }
+.mb-viewport {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.mb-track {
+  display: inline-block;
+  padding-left: 100%;
+  font-size: 13px;
+  color: #e1251b;
+  font-weight: 500;
+  animation: marquee-scroll 16s linear infinite;
+}
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
 }
 
 /* ---- Skeleton loading (首页骨架屏) ---- */

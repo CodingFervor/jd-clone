@@ -162,6 +162,26 @@ onUnmounted(() => {
 <template>
   <div class="checkout">
     <van-nav-bar title="确认订单" left-arrow @click-left="router.back()" fixed placeholder />
+    <!-- Address map preview (地址地图预览) — pure CSS map placeholder shown
+         when an address has been selected. Renders a faux map (green/blue/gray
+         blocks), a center pin, and the address text overlaid on top. -->
+    <div v-if="address" class="map-preview">
+      <div class="mp-canvas">
+        <div class="mp-block mp-water"></div>
+        <div class="mp-block mp-park"></div>
+        <div class="mp-block mp-road mp-road-h"></div>
+        <div class="mp-block mp-road mp-road-v"></div>
+        <div class="mp-block mp-building"></div>
+        <div class="mp-pin-wrap">
+          <span class="mp-pin">📍</span>
+          <span class="mp-pin-shadow"></span>
+        </div>
+        <div class="mp-overlay">
+          <div class="mp-overlay-text">{{ address }}</div>
+          <div class="mp-overlay-btn" @click="showToast('地图功能演示中')">查看大地图 ›</div>
+        </div>
+      </div>
+    </div>
     <van-cell-group inset title="收货信息">
       <van-field v-model="address" label="收货地址" placeholder="省市区 + 详细地址" rows="2" type="textarea" is-link v-if="addresses.length" @click="showAddrPicker = true" />
       <van-field v-model="address" label="收货地址" placeholder="省市区 + 详细地址" rows="2" type="textarea" v-else />
@@ -290,6 +310,103 @@ onUnmounted(() => {
 <style scoped>
 .checkout { min-height: 100vh; padding-bottom: 60px; }
 .ci { display: flex; gap: 10px; padding: 10px; background: #fff; }
+
+/* Address map preview (地址地图预览) — pure CSS faux map */
+.map-preview { margin: 8px 16px; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.mp-canvas {
+  position: relative;
+  height: 130px;
+  background:
+    linear-gradient(135deg, #e8f5e9 0%, #e3f2fd 100%);
+  overflow: hidden;
+}
+/* Faux map blocks: water (blue), park (green), road (gray), building (tan) */
+.mp-block { position: absolute; border-radius: 4px; }
+.mp-water {
+  top: 0; left: 0; width: 45%; height: 42%;
+  background: linear-gradient(135deg, #b3d9f2 0%, #90caf9 100%);
+  border-radius: 0 0 18px 0;
+}
+.mp-park {
+  bottom: 0; right: 0; width: 38%; height: 48%;
+  background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+  border-radius: 18px 0 0 0;
+}
+.mp-road { background: #eceff1; }
+.mp-road-h {
+  top: 48%; left: 0; right: 0; height: 8px;
+  background: repeating-linear-gradient(90deg, #fff 0, #fff 12px, #eceff1 12px, #eceff1 24px);
+  transform: translateY(-50%);
+}
+.mp-road-v {
+  left: 52%; top: 0; bottom: 0; width: 8px;
+  background: repeating-linear-gradient(0deg, #fff 0, #fff 12px, #eceff1 12px, #eceff1 24px);
+  transform: translateX(-50%);
+}
+.mp-building {
+  top: 14%; right: 10%; width: 22%; height: 26%;
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+}
+.mp-pin-wrap {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2;
+}
+.mp-pin {
+  font-size: 26px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 3px rgba(225, 37, 27, 0.5));
+  animation: mp-bounce 1.6s ease-in-out infinite;
+}
+.mp-pin-shadow {
+  width: 10px; height: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  margin-top: 2px;
+  animation: mp-shadow 1.6s ease-in-out infinite;
+}
+@keyframes mp-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes mp-shadow {
+  0%, 100% { transform: scale(1); opacity: 0.2; }
+  50% { transform: scale(0.7); opacity: 0.35; }
+}
+.mp-overlay {
+  position: absolute;
+  left: 10px; right: 10px; bottom: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 8px;
+  padding: 6px 10px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mp-overlay-text {
+  font-size: 12px;
+  color: #333;
+  line-height: 16px;
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mp-overlay-btn {
+  font-size: 12px;
+  color: #e1251b;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 .ci-info { flex: 1; font-size: 13px; }
 .ci-p { color: #e1251b; margin-top: 4px; }
 .price-detail { background: #fff; margin: 8px 16px; border-radius: 8px; padding: 12px 16px; }
