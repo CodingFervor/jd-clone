@@ -9,6 +9,9 @@ const items = ref([])
 const selectedTotal = ref(0)
 const allSelected = ref(true)
 const loading = ref(true)
+// Per-item selected count ("已选N件"), derived from the client cart items so
+// the label stays accurate even before the server round-trip in load() settles.
+const selectedCount = computed(() => items.value.filter((i) => i.selected === 1).length)
 // "猜你喜欢" recommended products, fetched as best-sellers from catalog.
 const recommendations = ref([])
 
@@ -79,6 +82,14 @@ async function toggleAll() {
   const target = allSelected.value ? 0 : 1
   for (const it of items.value) {
     if (it.selected !== target) await updateCart(it.id, it.quantity, target)
+  }
+  await load()
+}
+// 反选 (invert selection): toggle every item's selected state.
+async function invertSelection() {
+  for (const it of items.value) {
+    const target = it.selected === 1 ? 0 : 1
+    await updateCart(it.id, it.quantity, target)
   }
   await load()
 }
@@ -164,6 +175,8 @@ function isPriceDrop(it) {
 
       <van-submit-bar :price="selectedTotal * 100" button-text="结算" @submit="checkout">
         <van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox>
+        <span class="invert-btn" @click="invertSelection">反选</span>
+        <span class="selected-count">已选{{ selectedCount }}件</span>
       </van-submit-bar>
     </div>
   </div>
@@ -187,4 +200,7 @@ function isPriceDrop(it) {
 .rec-name { font-size: 12px; line-height: 16px; height: 32px; margin-top: 6px; }
 .rec-bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px; }
 .rec-price { color: #e1251b; font-size: 14px; font-weight: 600; }
+/* 反选 button + 已选N件 count inside the submit bar */
+.invert-btn { margin-left: 10px; padding: 3px 10px; font-size: 12px; color: #e1251b; border: 1px solid #e1251b; border-radius: 12px; cursor: pointer; white-space: nowrap; }
+.selected-count { margin-left: 10px; font-size: 12px; color: #999; white-space: nowrap; }
 </style>

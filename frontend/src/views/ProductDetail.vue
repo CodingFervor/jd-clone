@@ -38,6 +38,40 @@ const gallery = computed(() => {
   if (imgs.length) return imgs
   return product.value.image ? [product.value.image] : []
 })
+// Review summary stats (评价概览统计): computed from the loaded reviews ref.
+// Computes total count, average rating (1 decimal), good rate (4-5 star share),
+// and the per-star distribution used to render the horizontal bars.
+const reviewStats = computed(() => {
+  const list = reviews.value
+  const total = list.length
+  if (!total) return { total: 0, avg: '0.0', goodRate: 0, dist: [0, 0, 0, 0, 0] }
+  let sum = 0
+  let good = 0
+  const dist = [0, 0, 0, 0, 0] // index 0 → 1★, index 4 → 5★
+  for (const r of list) {
+    const s = Math.max(1, Math.min(5, Math.round(Number(r.rating) || 0)))
+    sum += s
+    dist[s - 1]++
+    if (s >= 4) good++
+  }
+  return {
+    total,
+    avg: (sum / total).toFixed(1),
+    goodRate: Math.round((good / total) * 100),
+    dist,
+  }
+})
+// Star distribution bars ordered 1★ (top) → 5★ (bottom), bar widths scaled
+// relative to the busiest star level so the longest bar is full width.
+const reviewDistBars = computed(() => {
+  const dist = reviewStats.value.dist
+  const max = Math.max(1, ...dist)
+  return [1, 2, 3, 4, 5].map((star) => ({
+    star,
+    count: dist[star - 1],
+    pct: Math.round((dist[star - 1] / max) * 100),
+  }))
+})
 async function onUploadReviewImage(item) {
   try {
     const res = await uploadImage(item.file)
@@ -360,6 +394,21 @@ function priceTrend() {
         <span>商品评价 ({{ reviews.length }})</span>
         <van-button size="mini" type="danger" plain @click="showReview = true">写评价</van-button>
       </div>
+      <!-- 评价概览统计: average score + good rate on the left, star distribution bars on the right -->
+      <div v-if="reviewStats.total" class="rev-summary">
+        <div class="rs-left">
+          <div class="rs-avg">{{ reviewStats.avg }}</div>
+          <van-rate :model-value="Number(reviewStats.avg)" allow-half readonly size="13" color="#e1251b" void-color="#eee" />
+          <div class="rs-goodrate">好评率 {{ reviewStats.goodRate }}%</div>
+        </div>
+        <div class="rs-right">
+          <div v-for="b in reviewDistBars" :key="b.star" class="rs-bar-row">
+            <span class="rs-bar-star">{{ b.star }}★</span>
+            <div class="rs-bar-track"><div class="rs-bar-fill" :style="{ width: b.pct + '%' }"></div></div>
+            <span class="rs-bar-count">{{ b.count }}</span>
+          </div>
+        </div>
+      </div>
       <div v-for="r in reviews" :key="r.id" class="rev-item">
         <div class="rev-user">
           <span>{{ r.username }}</span>
@@ -496,6 +545,17 @@ function priceTrend() {
 .ph-bar { width: 60%; background: linear-gradient(180deg, #ff9800, #e1251b); border-radius: 3px 3px 0 0; min-height: 8px; }
 .ph-date { font-size: 9px; color: #999; margin-top: 4px; }
 .desc h3, .rev-head { font-size: 15px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+/* 评价概览统计 card: average/good-rate on left, star distribution bars on right */
+.rev-summary { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid #f5f5f5; }
+.rs-left { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 96px; }
+.rs-avg { font-size: 32px; font-weight: bold; color: #e1251b; line-height: 1; }
+.rs-goodrate { font-size: 12px; color: #666; margin-top: 2px; }
+.rs-right { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.rs-bar-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #999; }
+.rs-bar-star { width: 24px; text-align: right; }
+.rs-bar-track { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+.rs-bar-fill { height: 100%; background: linear-gradient(90deg, #ff9800, #e1251b); border-radius: 4px; }
+.rs-bar-count { width: 20px; text-align: right; }
 .rev-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }
