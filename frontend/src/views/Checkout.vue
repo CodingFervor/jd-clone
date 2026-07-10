@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { getCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts } from '../api'
@@ -16,6 +16,25 @@ const showCouponPicker = ref(false)
 const showAddrPicker = ref(false)
 const showInvoice = ref(false)
 const invoiceForm = ref({ invoice_type: 'personal', title: '', tax_no: '', email: '' })
+
+// ---- Order success celebration (下单成功动画) ----
+// Full-screen overlay with a drawn checkmark, scale-in text and a brief
+// confetti emoji rain, shown after a successful createOrder before routing.
+const showSuccess = ref(false)
+const successConfetti = ref([])
+let successTimer = null
+
+function spawnSuccessConfetti() {
+  const emojis = ['🎉', '🎊', '✨']
+  successConfetti.value = Array.from({ length: 18 }, (_, i) => ({
+    id: i,
+    emoji: emojis[Math.floor(Math.random() * emojis.length)],
+    left: Math.random() * 100, // vw
+    delay: Math.random() * 0.6, // s
+    duration: 1.6 + Math.random() * 1.2, // s
+    size: 18 + Math.random() * 16, // px
+  }))
+}
 
 const subtotal = computed(() => items.value.reduce((s, i) => s + i.price * i.quantity, 0))
 
@@ -108,8 +127,13 @@ async function submit() {
       user_coupon_id: selectedCouponId.value || undefined,
       remark: remark.value,
     })
-    showSuccessToast('下单成功')
-    router.replace('/orders')
+    // Show the success celebration overlay, then navigate to /orders after 2s.
+    showSuccess.value = true
+    spawnSuccessConfetti()
+    successTimer = setTimeout(() => {
+      showSuccess.value = false
+      router.replace('/orders')
+    }, 2000)
   } catch (e) {
     showToast(e.response?.data?.error || '下单失败')
   }
@@ -126,6 +150,13 @@ async function submitInvoice() {
   }
 }
 function fmt(n) { return Number(n).toFixed(2) }
+
+onUnmounted(() => {
+  if (successTimer) {
+    clearTimeout(successTimer)
+    successTimer = null
+  }
+})
 </script>
 
 <template>
@@ -225,6 +256,34 @@ function fmt(n) { return Number(n).toFixed(2) }
         <van-button type="danger" block @click="submitInvoice" style="margin-top:12px">保存</van-button>
       </div>
     </van-popup>
+
+    <!-- Order success celebration (下单成功动画) -->
+    <transition name="success-fade">
+      <div v-if="showSuccess" class="success-overlay">
+        <div class="success-confetti">
+          <span
+            v-for="c in successConfetti"
+            :key="c.id"
+            class="sc-piece"
+            :style="{
+              left: c.left + 'vw',
+              animationDelay: c.delay + 's',
+              animationDuration: c.duration + 's',
+              fontSize: c.size + 'px',
+            }"
+          >{{ c.emoji }}</span>
+        </div>
+        <div class="success-body">
+          <div class="success-check">
+            <svg viewBox="0 0 52 52" class="sc-svg">
+              <circle class="sc-circle" cx="26" cy="26" r="24" fill="none" />
+              <path class="sc-check" fill="none" d="M14 27 l8 8 l16 -18" />
+            </svg>
+          </div>
+          <div class="success-text">下单成功！</div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -263,4 +322,81 @@ function fmt(n) { return Number(n).toFixed(2) }
 .invoice-form { padding: 20px; }
 .invoice-form h3 { text-align: center; margin-bottom: 16px; }
 .invoice-form .van-cell-group { border: 1px solid #eee; border-radius: 8px; }
+
+/* ---- Order success celebration (下单成功动画) ---- */
+.success-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  overflow: hidden;
+}
+.success-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  z-index: 2;
+}
+.success-check {
+  width: 96px;
+  height: 96px;
+}
+.sc-svg { width: 100%; height: 100%; }
+.sc-circle {
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-dasharray: 151;
+  stroke-dashoffset: 151;
+  animation: sc-draw-circle 0.5s ease-out forwards;
+}
+.sc-check {
+  stroke: #fff;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: sc-draw-check 0.35s 0.45s ease-out forwards;
+}
+@keyframes sc-draw-circle {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes sc-draw-check {
+  to { stroke-dashoffset: 0; }
+}
+.success-text {
+  color: #fff;
+  font-size: 24px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  animation: sc-scale-in 0.4s 0.6s ease-out backwards;
+}
+@keyframes sc-scale-in {
+  0% { opacity: 0; transform: scale(0.5); }
+  60% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+/* Confetti emoji rain */
+.success-confetti { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.sc-piece {
+  position: absolute;
+  top: -40px;
+  animation-name: sc-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+@keyframes sc-fall {
+  0% { transform: translateY(-40px) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+}
+/* Overlay enter/leave transition */
+.success-fade-enter-active, .success-fade-leave-active { transition: opacity 0.25s; }
+.success-fade-enter-from, .success-fade-leave-to { opacity: 0; }
 </style>

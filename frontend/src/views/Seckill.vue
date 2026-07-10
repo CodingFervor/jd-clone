@@ -29,6 +29,15 @@ function progress(d) {
   if (d.stock <= 0) return 100
   return Math.min(100, Math.round((d.sold / d.stock) * 100))
 }
+// 库存剩余比例 (剩余可抢 / 总库存)
+function stockRatio(d) {
+  if (d.stock <= 0) return 0
+  return Math.max(0, (d.stock - d.sold) / d.stock)
+}
+// Feature 2: 紧迫感 — 库存低于 20% 时进度条抖动
+function isLowStock(d) {
+  return stockRatio(d) < 0.2 && stockRatio(d) > 0
+}
 async function grab(d) {
   try {
     const res = await grabSeckill(d.id)
@@ -43,6 +52,8 @@ function fmt(n) { return Number(n).toFixed(2) }
 
 <template>
   <div class="seckill-page">
+    <!-- Feature 2: 闪电闪屏覆盖层 (纯 CSS 每 5 秒闪一次) -->
+    <div class="lightning-flash" aria-hidden="true"></div>
     <van-nav-bar title="京东秒杀" left-arrow @click-left="router.back()" fixed placeholder />
     <div v-if="loading" class="loading"><van-loading /></div>
     <van-empty v-else-if="!deals.length" description="暂无秒杀活动" />
@@ -57,12 +68,12 @@ function fmt(n) { return Number(n).toFixed(2) }
             <span class="dc-origin">¥{{ fmt(d.original_price) }}</span>
           </div>
           <div class="dc-progress">
-            <div class="dp-bar"><div class="dp-fill" :style="{ width: progress(d) + '%' }"></div></div>
+            <div class="dp-bar" :class="{ 'dp-bar--urgent': isLowStock(d) }"><div class="dp-fill" :style="{ width: progress(d) + '%' }"></div></div>
             <span class="dp-text">已抢{{ progress(d) }}%</span>
           </div>
           <div class="dc-bottom">
             <span class="dc-countdown">⏰ {{ fmtRemain(remainMs(d)) }}</span>
-            <van-button size="small" type="danger" round :disabled="progress(d) >= 100" @click="grab(d)">
+            <van-button class="grab-btn" :class="{ 'grab-btn--pulse': progress(d) < 100 }" size="small" type="danger" round :disabled="progress(d) >= 100" @click="grab(d)">
               {{ progress(d) >= 100 ? '已抢光' : '马上抢' }}
             </van-button>
           </div>
@@ -75,6 +86,23 @@ function fmt(n) { return Number(n).toFixed(2) }
 <style scoped>
 .seckill-page { min-height: 100vh; }
 .loading { text-align: center; padding: 80px; }
+/* Feature 2: 闪电闪屏覆盖层 — 纯 CSS 每 5 秒闪一次 */
+.lightning-flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2000;
+  animation: lightning-flash 5s infinite;
+}
+@keyframes lightning-flash {
+  0%, 92%, 100% { opacity: 0; }
+  93% { opacity: 0.55; }
+  94% { opacity: 0.1; }
+  95% { opacity: 0.7; }
+  96% { opacity: 0; }
+}
 .banner { background: linear-gradient(135deg, #e1251b, #f5574d); color: #fff; text-align: center; padding: 14px; font-size: 16px; font-weight: bold; }
 .deal-card { display: flex; gap: 12px; background: #fff; margin: 8px; border-radius: 10px; padding: 12px; }
 .dc-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -88,4 +116,20 @@ function fmt(n) { return Number(n).toFixed(2) }
 .dp-text { font-size: 11px; color: #e1251b; white-space: nowrap; }
 .dc-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
 .dc-countdown { color: #e1251b; font-size: 14px; font-weight: bold; font-variant-numeric: tabular-nums; }
+/* Feature 2: 库存不足时进度条紧迫感抖动 */
+.dp-bar--urgent { animation: urgent-shake 0.5s infinite; }
+@keyframes urgent-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-2px); }
+  40% { transform: translateX(2px); }
+  60% { transform: translateX(-1px); }
+  80% { transform: translateX(1px); }
+}
+/* Feature 2: 马上抢按钮脉冲发光 (库存>0时) */
+.grab-btn--pulse { animation: btn-pulse 1s infinite; }
+@keyframes btn-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(225,37,27,0.55); }
+  70% { box-shadow: 0 0 0 12px rgba(225,37,27,0); }
+  100% { box-shadow: 0 0 0 0 rgba(225,37,27,0); }
+}
 </style>

@@ -21,6 +21,19 @@ function statusText(s) {
 function statusColor(s) {
   return { pending: 'warning', approved: 'primary', rejected: 'danger', completed: 'success' }[s] || 'default'
 }
+// 退款进度百分比: pending=25%, approved=75%, rejected/completed=100%
+function progressPct(s) {
+  return { pending: 25, approved: 75, rejected: 100, completed: 100 }[s] ?? 0
+}
+// 进度条填充颜色: pending=orange, approved=blue, completed=green, rejected=red
+function progressBarColor(s) {
+  return {
+    pending: '#ff9800',
+    approved: '#1989fa',
+    completed: '#07c160',
+    rejected: '#ee0a24'
+  }[s] || '#999'
+}
 function typeText(t) {
   return { refund_only: '仅退款', return_refund: '退货退款', exchange: '换货' }[t] || '退款'
 }
@@ -48,6 +61,13 @@ function fmt(n) { return Number(n).toFixed(2) }
         <div class="r-type">{{ typeText(r.type) }} · ¥{{ fmt(r.amount) }}</div>
         <div class="r-reason">原因: {{ r.reason }}</div>
         <div v-if="r.admin_note" class="r-note">客服回复: {{ r.admin_note }}</div>
+        <!-- Feature 1: 退款进度条 -->
+        <div class="r-progress" :style="{ '--bar-color': progressBarColor(r.status) }">
+          <div class="rp-track">
+            <div class="rp-fill" :style="{ width: progressPct(r.status) + '%' }"></div>
+            <span class="rp-label">{{ statusText(r.status) }} · {{ progressPct(r.status) }}%</span>
+          </div>
+        </div>
         <div v-if="r.tracks && r.tracks.length" class="r-track-toggle" @click="toggleTimeline(r.id)">
           {{ expanded[r.id] ? '收起进度 ▲' : '查看售后进度 ▼' }}
         </div>
@@ -75,6 +95,11 @@ function fmt(n) { return Number(n).toFixed(2) }
 .r-type { font-size: 16px; font-weight: bold; color: #e1251b; margin: 8px 0; }
 .r-reason { font-size: 13px; color: #666; }
 .r-note { font-size: 12px; color: #1989fa; margin-top: 6px; padding: 6px; background: #f0f7ff; border-radius: 4px; }
+/* Feature 1: 退款进度条 */
+.r-progress { margin-top: 10px; }
+.rp-track { position: relative; height: 20px; background: #f2f3f5; border-radius: 10px; overflow: hidden; }
+.rp-fill { height: 100%; background: var(--bar-color, #e1251b); border-radius: 10px; transition: width 0.4s ease; }
+.rp-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.25); }
 .r-track-toggle { color: #e1251b; font-size: 13px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #f5f5f5; }
 .timeline { margin-top: 12px; padding-left: 4px; }
 .tl-item { display: flex; gap: 10px; padding-bottom: 16px; position: relative; }

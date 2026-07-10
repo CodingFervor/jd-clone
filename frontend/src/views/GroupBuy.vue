@@ -28,6 +28,17 @@ function fmtRemain(ms) {
 function progress(d) {
   return Math.min(100, Math.round((d.joined / d.required) * 100))
 }
+// Feature 3: 为每个拼团生成 2-4 个演示成员头像 (dicebear API)
+// 用 id 作种子保证同一拼团头像稳定，第一个为团长(金色边框)
+function memberAvatars(d) {
+  const count = 2 + (Math.abs(d.id) % 3) // 2~4 个
+  const seedBase = 'gb-' + d.id + '-'
+  const avatars = []
+  for (let i = 0; i < count; i++) {
+    avatars.push(`https://api.dicebear.com/7.x/adventurer/svg?seed=${seedBase}${i}`)
+  }
+  return avatars
+}
 async function join(d) {
   try {
     const res = await joinGroupBuy(d.id)
@@ -56,6 +67,21 @@ function fmt(n) { return Number(n).toFixed(2) }
             <span class="gc-group">¥{{ fmt(d.group_price) }}</span>
             <span class="gc-origin">¥{{ fmt(d.original_price) }}</span>
           </div>
+          <!-- Feature 3: 拼团成员头像 -->
+          <div class="gc-members">
+            <div class="gm-stack">
+              <img
+                v-for="(a, i) in memberAvatars(d)"
+                :key="i"
+                :src="a"
+                class="gm-avatar"
+                :class="{ 'gm-leader': i === 0 }"
+                :style="{ zIndex: 10 - i, marginLeft: i === 0 ? '0' : '-8px' }"
+                alt="团员头像"
+              />
+            </div>
+            <span class="gm-count">{{ d.joined }}人已参团</span>
+          </div>
           <div class="gc-progress">
             <div class="gp-bar"><div class="gp-fill" :style="{ width: progress(d) + '%' }"></div></div>
             <span class="gp-text">{{ d.joined }}/{{ d.required }}人</span>
@@ -82,6 +108,15 @@ function fmt(n) { return Number(n).toFixed(2) }
 .gc-price-row { display: flex; align-items: baseline; gap: 8px; margin: 6px 0; }
 .gc-group { color: #e1251b; font-size: 20px; font-weight: bold; }
 .gc-origin { color: #999; font-size: 12px; text-decoration: line-through; }
+/* Feature 3: 拼团成员头像堆叠 */
+.gc-members { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; }
+.gm-stack { display: flex; align-items: center; }
+.gm-avatar {
+  width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff;
+  object-fit: cover; background: #f5f5f5; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.gm-leader { border-color: #ffc107; box-shadow: 0 0 0 1px #ffd54f, 0 1px 3px rgba(0,0,0,0.15); }
+.gm-count { font-size: 11px; color: #e1251b; font-weight: bold; }
 .gc-progress { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .gp-bar { flex: 1; height: 12px; background: #ffe0e0; border-radius: 6px; overflow: hidden; }
 .gp-fill { height: 100%; background: linear-gradient(90deg, #ff9800, #e1251b); transition: width 0.3s; }

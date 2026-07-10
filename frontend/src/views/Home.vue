@@ -9,6 +9,10 @@ const seckill = ref([])
 const products = ref([])
 const categories = ref([])
 const loading = ref(false)
+// Skeleton placeholders: a fixed set of dummy cards rendered while the real
+// data is loading, so the layout doesn't jump when content arrives.
+const skeletonSeckill = Array.from({ length: 4 })
+const skeletonProducts = Array.from({ length: 3 })
 
 // ---- Flash sale countdown (首页限时抢购倒计时) ----
 // Counts down to the next top-of-hour. When it hits 0, briefly shows
@@ -181,7 +185,16 @@ onUnmounted(() => {
         <span class="jd-red"><van-icon name="clock-o" /> 京东秒杀</span>
         <span class="more">更多 ›</span>
       </div>
-      <div class="seckill-scroll">
+      <!-- Skeleton seckill cards while loading -->
+      <div v-if="loading" class="seckill-scroll">
+        <div v-for="(_, i) in skeletonSeckill" :key="'sk-' + i" class="seckill-card">
+          <div class="skel skel-seckill-img"></div>
+          <div class="skel skel-seckill-price"></div>
+          <div class="skel skel-seckill-origin"></div>
+        </div>
+      </div>
+      <!-- Real content (fade in once loaded) -->
+      <div v-else class="seckill-scroll" :class="{ 'content-fade-in': !loading }">
         <div v-for="p in seckill" :key="p.id" class="seckill-card" @click="goProduct(p.id)">
           <van-image width="90" height="90" radius="6" :src="p.image" fit="cover" />
           <div class="price">¥{{ fmt(p.price) }}</div>
@@ -210,7 +223,16 @@ onUnmounted(() => {
     <!-- Product list (waterfall) -->
     <div class="section">
       <div class="section-head"><span>为你推荐</span></div>
-      <div class="product-grid">
+      <!-- Skeleton product cards while loading -->
+      <div v-if="loading" class="product-grid">
+        <div v-for="(_, i) in skeletonProducts" :key="'sp-' + i" class="product-card">
+          <div class="skel skel-product-img"></div>
+          <div class="skel skel-product-line"></div>
+          <div class="skel skel-product-line short"></div>
+        </div>
+      </div>
+      <!-- Real content (fade in once loaded) -->
+      <div v-else class="product-grid" :class="{ 'content-fade-in': !loading }">
         <div v-for="p in products" :key="p.id" class="product-card" @click="goProduct(p.id)">
           <div class="p-img-wrap">
             <van-image width="100%" height="170" :src="p.image" fit="cover" radius="6" />
@@ -226,7 +248,6 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-    <div v-if="loading" class="loading"><van-loading /></div>
   </div>
 </template>
 
@@ -507,5 +528,54 @@ onUnmounted(() => {
   border-radius: 20px;
   position: relative;
   z-index: 1;
+}
+
+/* ---- Skeleton loading (首页骨架屏) ---- */
+.skel {
+  background: #ececec;
+  border-radius: 6px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  0% { background: #ececec; }
+  50% { background: #f5f5f5; }
+  100% { background: #ececec; }
+}
+/* Skeleton seckill card pieces */
+.skel-seckill-img {
+  width: 90px;
+  height: 90px;
+  margin: 0 auto;
+}
+.skel-seckill-price {
+  width: 60px;
+  height: 16px;
+  margin: 8px auto 0;
+}
+.skel-seckill-origin {
+  width: 44px;
+  height: 12px;
+  margin: 6px auto 0;
+}
+/* Skeleton product card pieces */
+.skel-product-img {
+  width: 100%;
+  height: 170px;
+  border-radius: 6px;
+}
+.skel-product-line {
+  height: 14px;
+  margin: 8px 6px 0;
+}
+.skel-product-line.short {
+  width: 50%;
+}
+/* Fade real content in once loaded so it doesn't pop in abruptly. */
+.content-fade-in {
+  animation: content-fade-in 0.4s ease-out;
+}
+@keyframes content-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

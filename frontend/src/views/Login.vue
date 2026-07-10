@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { login, register, getCoupons, claimCoupon } from '../api'
@@ -107,6 +107,20 @@ async function submit() {
   }
 }
 
+// ---- Social login & forgot password (登录页美化) ----
+// Visual-only social login buttons; show a toast on tap for the demo.
+const socials = [
+  { key: 'wechat', label: '微信', emoji: '💚' },
+  { key: 'alipay', label: '支付宝', emoji: '💙' },
+  { key: 'qq', label: 'QQ', emoji: '🐧' },
+]
+function socialLogin(s) {
+  showToast(s.label + '登录（演示）')
+}
+function forgotPassword() {
+  showToast('找回密码（演示）')
+}
+
 onUnmounted(() => {
   if (confettiTimer) {
     clearInterval(confettiTimer)
@@ -117,17 +131,27 @@ onUnmounted(() => {
 
 <template>
   <div class="login-page">
-    <van-nav-bar left-arrow @click-left="router.back()" />
-    <div class="logo-area">
-      <div class="jd-logo">JD</div>
-      <p class="welcome">{{ mode === 'login' ? '欢迎登录京东' : '注册京东账号' }}</p>
+    <!-- Gradient top banner with JD wordmark -->
+    <div class="banner">
+      <van-nav-bar left-arrow @click-left="router.back()" :border="false" background="transparent" />
+      <div class="banner-inner">
+        <div class="jd-wordmark">JD 京东</div>
+        <div class="banner-sub">多 · 快 · 好 · 省</div>
+      </div>
     </div>
-    <div class="form">
+
+    <!-- Form card (slides up on mount) -->
+    <div class="form-card slide-up">
+      <div class="welcome-back">欢迎回来👋</div>
+      <p class="welcome">{{ mode === 'login' ? '欢迎登录京东' : '注册京东账号' }}</p>
       <van-cell-group inset>
         <van-field v-model="username" label="用户名" placeholder="请输入用户名" clearable />
         <van-field v-model="password" type="password" label="密码" placeholder="请输入密码" clearable />
         <van-field v-if="mode === 'register'" v-model="nickname" label="昵称" placeholder="选填" clearable />
       </van-cell-group>
+      <div class="form-row">
+        <span class="forgot-link" @click="forgotPassword">忘记密码</span>
+      </div>
       <div style="margin: 16px">
         <van-button type="danger" block round @click="submit">{{ mode === 'login' ? '登 录' : '注 册' }}</van-button>
       </div>
@@ -135,6 +159,17 @@ onUnmounted(() => {
         {{ mode === 'login' ? '没有账号？去注册' : '已有账号？去登录' }}
       </div>
       <div class="hint">演示账号: admin / admin123</div>
+
+      <!-- Social login buttons row -->
+      <div class="social-section">
+        <div class="social-divider"><span>其他登录方式</span></div>
+        <div class="social-row">
+          <div v-for="s in socials" :key="s.key" class="social-btn" @click="socialLogin(s)">
+            <span class="social-emoji">{{ s.emoji }}</span>
+            <span class="social-label">{{ s.label }}</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- New user welcome coupon pack (新人专享礼包) -->
@@ -185,12 +220,110 @@ onUnmounted(() => {
 
 <style scoped>
 .login-page { min-height: 100vh; background: #fff; }
-.logo-area { text-align: center; padding: 30px 0 20px; }
-.jd-logo { display: inline-block; background: #e1251b; color: #fff; font-size: 36px; font-weight: bold; width: 70px; height: 70px; line-height: 70px; border-radius: 12px; }
-.welcome { margin-top: 14px; font-size: 18px; color: #333; }
-.form { margin-top: 10px; }
+
+/* ---- Gradient top banner (登录页美化) ---- */
+.banner {
+  background: linear-gradient(135deg, #e1251b 0%, #ff4d4f 55%, #ff7a45 100%);
+  color: #fff;
+  padding-bottom: 36px;
+  border-bottom-left-radius: 24px;
+  border-bottom-right-radius: 24px;
+}
+.banner :deep(.van-nav-bar) { background: transparent; }
+.banner :deep(.van-nav-bar .van-icon) { color: #fff; }
+.banner-inner { text-align: center; padding: 8px 0 4px; }
+.jd-wordmark {
+  font-size: 34px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+.banner-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  opacity: 0.9;
+  letter-spacing: 2px;
+}
+
+/* ---- Form card (slides up on mount) ---- */
+.form-card {
+  position: relative;
+  margin: -24px 12px 0;
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px 4px 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  z-index: 2;
+}
+.slide-up {
+  animation: slide-up 0.5s ease-out;
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.welcome-back {
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  color: #e1251b;
+}
+.welcome { margin: 6px 0 14px; font-size: 14px; color: #999; text-align: center; }
+.form-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 28px;
+  margin-top: 8px;
+}
+.forgot-link {
+  font-size: 13px;
+  color: #e1251b;
+}
 .switch { text-align: center; color: #e1251b; font-size: 14px; }
 .hint { text-align: center; color: #999; font-size: 12px; margin-top: 16px; }
+
+/* ---- Social login row ---- */
+.social-section { margin-top: 22px; }
+.social-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #bbb;
+  font-size: 12px;
+  margin: 0 24px 16px;
+}
+.social-divider::before,
+.social-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #eee;
+}
+.social-divider span { padding: 0 12px; }
+.social-row {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+}
+.social-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.social-emoji {
+  width: 46px;
+  height: 46px;
+  line-height: 46px;
+  text-align: center;
+  font-size: 24px;
+  background: #f7f8fa;
+  border-radius: 50%;
+}
+.social-label {
+  font-size: 12px;
+  color: #666;
+}
 
 /* ---- New user welcome coupon pack (新人专享礼包) ---- */
 .welcome-mask {

@@ -10,6 +10,32 @@ const orderId = ref(Number(route.query.order_id) || 0)
 const shipment = ref(null)
 const loading = ref(true)
 
+// ---- Delivery person info card (快递员信息卡) ----
+// A random courier identity (name + dicebear avatar + masked phone + rating),
+// shown only while a shipment is in transit or shipped.
+const courierNames = ['张师傅', '李师傅', '王师傅', '刘师傅', '陈师傅']
+const courier = ref(pickCourier())
+
+function pickCourier() {
+  const name = courierNames[Math.floor(Math.random() * courierNames.length)]
+  return {
+    name,
+    phone: '138****8888',
+    rating: 4.8,
+    // Dicebear avatar seeded by the picked name so it stays consistent.
+    avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=e1251b,ff7a45,fa2c6e&backgroundType=gradientSolid`,
+  }
+}
+
+function contactCourier() {
+  showToast('正在拨号...')
+}
+
+// Whether the courier card should be visible: only mid-transit.
+function showCourierCard() {
+  return shipment.value && ['in_transit', 'shipped'].includes(shipment.value.status)
+}
+
 onMounted(load)
 
 async function load() {
@@ -75,6 +101,18 @@ function activePoint() {
           {{ statusText(shipment.status) }}
         </van-tag>
       </div>
+      <!-- Delivery person info card (快递员信息卡) -->
+      <div v-if="showCourierCard()" class="courier-card">
+        <img class="courier-avatar" :src="courier.avatar" alt="courier" />
+        <div class="courier-info">
+          <div class="courier-name">{{ courier.name }}</div>
+          <div class="courier-meta">
+            <span class="courier-phone">{{ courier.phone }}</span>
+            <span class="courier-rating">4.8★</span>
+          </div>
+        </div>
+        <van-button type="danger" size="small" round @click="contactCourier">联系快递员</van-button>
+      </div>
       <div class="track-list">
         <div v-for="(t, i) in shipment.tracks" :key="t.id" class="track-item" :class="{ first: i === 0 }">
           <div class="track-dot" :class="{ active: i === 0 }"></div>
@@ -136,4 +174,43 @@ function activePoint() {
 .mp-item.active .mp-dot { background: #e1251b; }
 .mp-name { font-size: 11px; color: #999; }
 .mp-item.active .mp-name { color: #e1251b; font-weight: bold; }
+
+/* ---- Delivery person info card (快递员信息卡) ---- */
+.courier-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  margin: 0 10px 10px;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.courier-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid #ffe0e0;
+}
+.courier-info { flex: 1; }
+.courier-name {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+.courier-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.courier-phone {
+  font-size: 13px;
+  color: #666;
+}
+.courier-rating {
+  font-size: 13px;
+  color: #ff9800;
+  font-weight: bold;
+}
 </style>
