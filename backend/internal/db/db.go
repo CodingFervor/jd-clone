@@ -421,6 +421,18 @@ func createTables() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_gift_cards_user ON gift_cards(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_gift_cards_code ON gift_cards(code)`,
+		// Price alerts: a user's subscription to be notified when a product drops below a target price (降价提醒).
+		`CREATE TABLE IF NOT EXISTS price_alerts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			product_id INTEGER NOT NULL,
+			target_price REAL NOT NULL DEFAULT 0,
+			notified INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, product_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_price_alerts_product ON price_alerts(product_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_price_alerts_user ON price_alerts(user_id)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.

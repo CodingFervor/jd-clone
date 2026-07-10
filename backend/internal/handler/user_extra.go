@@ -634,6 +634,52 @@ func (h *Handler) CheckRestock(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"subscribed": h.Restock.IsSubscribed(uid, pid)})
 }
 
+// ===================== Price alerts (降价提醒) =====================
+
+// SubscribePriceAlert: POST /products/:id/price-alert (requires auth, body: target_price)
+func (h *Handler) SubscribePriceAlert(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的商品ID"})
+		return
+	}
+	var req struct {
+		TargetPrice float64 `json:"target_price"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	if req.TargetPrice <= 0 {
+		// Default to 90% of the current price when no target is supplied.
+		if p, _ := h.Product.Get(pid); p != nil {
+			req.TargetPrice = p.Price * 0.9
+		}
+	}
+	if err := h.PriceAlert.Subscribe(uid, pid, req.TargetPrice); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "订阅失败"})
+		return
+	}
+	alert, _ := h.PriceAlert.Get(uid, pid)
+	c.JSON(http.StatusOK, gin.H{"message": "降价提醒已开启", "data": alert})
+}
+
+// CheckPriceAlert: GET /products/:id/price-alert (auth-optional)
+func (h *Handler) CheckPriceAlert(c *gin.Context) {
+	uid, ok := h.currentUserID(c, true)
+	if !ok {
+		return
+	}
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"subscribed": false, "data": nil})
+		return
+	}
+	alert, _ := h.PriceAlert.Get(uid, pid)
+	c.JSON(http.StatusOK, gin.H{"subscribed": alert != nil, "data": alert})
+}
+
 // ===================== Product Q&A (商品问答) =====================
 
 // ListQA: GET /products/:id/qa (public)

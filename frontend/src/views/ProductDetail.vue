@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA, markReviewUseful } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA, markReviewUseful, subscribePriceAlert, checkPriceAlert } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,6 +19,10 @@ const priceStats = ref(null)
 const showPriceHistory = ref(false)
 const showPoster = ref(false)
 const restockSubscribed = ref(false)
+// Price drop alert (降价提醒)
+const priceAlert = ref(null)
+const showPriceAlert = ref(false)
+const alertTargetPrice = ref('')
 // Product Q&A
 const qaList = ref([])
 const showQA = ref(false)
@@ -139,6 +143,10 @@ onMounted(async () => {
     // Check restock subscription.
     if (localStorage.getItem('jd_token')) {
       checkRestock(route.params.id).then((s) => { restockSubscribed.value = s }).catch(() => {})
+    }
+    // Check price-drop alert subscription (降价提醒).
+    if (localStorage.getItem('jd_token')) {
+      checkPriceAlert(route.params.id).then((d) => { priceAlert.value = d.data }).catch(() => {})
     }
     // Load Q&A.
     getProductQA(route.params.id).then((d) => { qaList.value = d || [] }).catch(() => {})
@@ -313,6 +321,28 @@ async function toggleRestock() {
     showToast('操作失败')
   }
 }
+// Open the price-alert sheet. The target price is prefilled with 90% of the
+// current price (the same default the backend uses) unless already subscribed.
+function openPriceAlert() {
+  if (!checkLogin()) return
+  alertTargetPrice.value = (currentPrice() * 0.9).toFixed(2)
+  showPriceAlert.value = true
+}
+async function submitPriceAlert() {
+  const target = Number(alertTargetPrice.value)
+  if (!target || target <= 0) {
+    showToast('请输入有效的目标价')
+    return
+  }
+  try {
+    const res = await subscribePriceAlert(product.value.id, target)
+    priceAlert.value = res.data
+    showPriceAlert.value = false
+    showSuccessToast('降价提醒已开启')
+  } catch (e) {
+    showToast(e.response?.data?.error || '订阅失败')
+  }
+}
 async function submitQA() {
   if (!qaQuestion.value.trim()) { showToast('请输入问题'); return }
   if (!checkLogin()) return
@@ -430,11 +460,15 @@ function priceTrend() {
     <div v-if="priceHistory.length" class="price-history">
       <div class="ph-head">
         <span>📈 比价历史</span>
-        <span v-if="priceStats" class="ph-stats">
-          最低 <b class="green">¥{{ fmt(priceStats.lowest) }}</b>
-          <span v-if="priceTrend() === 'down'" class="trend down">↓降价</span>
-          <span v-else-if="priceTrend() === 'up'" class="trend up">↑涨价</span>
-          <span v-else class="trend flat">→平稳</span>
+        <span class="ph-head-right">
+          <span v-if="priceStats" class="ph-stats">
+            最低 <b class="green">¥{{ fmt(priceStats.lowest) }}</b>
+            <span v-if="priceTrend() === 'down'" class="trend down">↓降价</span>
+            <span v-else-if="priceTrend() === 'up'" class="trend up">↑涨价</span>
+            <span v-else class="trend flat">→平稳</span>
+          </span>
+          <van-tag v-if="priceAlert" type="danger" round size="medium" @click="openPriceAlert">已订阅 ¥{{ fmt(priceAlert.target_price) }}</van-tag>
+          <van-button v-else size="mini" type="danger" plain round icon="bell" @click="openPriceAlert">降价提醒</van-button>
         </span>
       </div>
       <div class="ph-chart">
@@ -467,6 +501,26 @@ function priceTrend() {
         <h3>我要提问</h3>
         <van-field v-model="qaQuestion" type="textarea" placeholder="说说你想了解的问题" rows="3" />
         <van-button type="danger" block @click="submitQA" style="margin-top:12px">提交问题</van-button>
+      </div>
+    </van-popup>
+
+    <!-- Price drop alert popup (降价提醒) -->
+    <van-popup v-model:show="showPriceAlert" position="bottom" round closeable>
+      <div class="alert-form">
+        <h3>降价提醒</h3>
+        <p class="alert-hint">设置目标价格，当商品价格低于该价格时通知您</p>
+        <van-field
+          v-model="alertTargetPrice"
+          type="number"
+          label="目标价格"
+          placeholder="请输入目标价格"
+        >
+          <template #left-icon><span style="color:#e1251b;font-weight:bold">¥</span></template>
+        </van-field>
+        <p class="alert-current">当前价格：¥{{ fmt(currentPrice()) }}</p>
+        <van-button type="danger" block round @click="submitPriceAlert" style="margin-top:12px">
+          {{ priceAlert ? '更新提醒' : '开启提醒' }}
+        </van-button>
       </div>
     </van-popup>
 
@@ -647,6 +701,12 @@ function priceTrend() {
 .trend.up { color: #e1251b; }
 .trend.flat { color: #999; }
 .ph-chart { display: flex; align-items: flex-end; gap: 6px; height: 80px; }
+.ph-head-right { display: flex; align-items: center; gap: 8px; }
+.alert-form { padding: 20px; }
+.alert-form h3 { text-align: center; margin-bottom: 8px; }
+.alert-hint { color: #999; font-size: 12px; text-align: center; margin-bottom: 16px; }
+.alert-form .van-field { border: 1px solid #eee; border-radius: 8px; }
+.alert-current { color: #666; font-size: 13px; margin-top: 10px; text-align: center; }
 .ph-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
 .ph-bar { width: 60%; background: linear-gradient(180deg, #ff9800, #e1251b); border-radius: 3px 3px 0 0; min-height: 8px; }
 .ph-date { font-size: 9px; color: #999; margin-top: 4px; }

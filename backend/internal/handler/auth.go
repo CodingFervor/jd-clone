@@ -45,6 +45,7 @@ type Handler struct {
 	TieredDiscount *repository.TieredDiscountRepo
 	Lottery        *repository.LotteryRepo
 	GiftCard       *repository.GiftCardRepo
+	PriceAlert     *repository.PriceAlertRepo
 	jwtKey         []byte
 }
 
@@ -114,6 +115,11 @@ func (h *Handler) SetTieredDiscount(td *repository.TieredDiscountRepo) {
 // SetLottery attaches the lottery-wheel (积分大转盘) repo.
 func (h *Handler) SetLottery(l *repository.LotteryRepo) {
 	h.Lottery = l
+}
+
+// SetPriceAlert attaches the price-drop-alert (降价提醒) repo.
+func (h *Handler) SetPriceAlert(pa *repository.PriceAlertRepo) {
+	h.PriceAlert = pa
 }
 
 // ---- JWT (HS256, hand-rolled, no external dep) ----

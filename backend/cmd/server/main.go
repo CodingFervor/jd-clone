@@ -95,6 +95,8 @@ func main() {
 	h.SetLottery(lotteryRepo)
 	// Attach the gift-card (礼品卡) repo.
 	h.SetGiftCard(repository.NewGiftCardRepo(db.DB))
+	// Attach the price-drop-alert (降价提醒) repo.
+	h.SetPriceAlert(repository.NewPriceAlertRepo(db.DB))
 
 	// Ensure the images directory exists for the static file server.
 	_ = os.MkdirAll("data/images", 0o755)

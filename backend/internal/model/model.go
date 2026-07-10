@@ -103,6 +103,17 @@ type PriceHistory struct {
 	RecordedAt time.Time `json:"recorded_at"`
 }
 
+// PriceAlert is a user's subscription to be notified when a product drops below a
+// target price (降价提醒).
+type PriceAlert struct {
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	ProductID   int64     `json:"product_id"`
+	TargetPrice float64   `json:"target_price"`
+	Notified    int       `json:"notified"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 // Review is a buyer's rating of a product.
 type Review struct {
 	ID        int64        `json:"id"`
