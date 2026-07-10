@@ -84,6 +84,19 @@ function goProduct(id) {
 function fmt(n) {
   return Number(n).toFixed(2)
 }
+
+// ---- New product & seckill badges (新品限时标签) ----
+// A product is "NEW" if created within the last 7 days.
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+function isNew(p) {
+  if (!p || !p.created_at) return false
+  const created = new Date(p.created_at).getTime()
+  if (isNaN(created)) return false
+  return Date.now() - created < WEEK_MS
+}
+function isSeckill(p) {
+  return !!(p && p.is_seckill)
+}
 </script>
 
 <template>
@@ -120,7 +133,11 @@ function fmt(n) {
             :class="{ 'prod-comparing': inCompare(p) }"
             @click="goProduct(p.id)"
           >
-            <van-image width="100" height="100" radius="6" :src="p.image" fit="cover" />
+            <div class="prod-img-wrap">
+              <van-image width="100" height="100" radius="6" :src="p.image" fit="cover" />
+              <span v-if="isNew(p)" class="prod-badge prod-badge-new">NEW</span>
+              <span v-if="isSeckill(p)" class="prod-badge prod-badge-seckill">限时</span>
+            </div>
             <div class="prod-info">
               <div class="prod-name van-multi-ellipsis--l2">{{ p.name }}</div>
               <div class="prod-sub van-ellipsis">{{ p.subtitle }}</div>
@@ -201,6 +218,24 @@ function fmt(n) {
 .sort-bar span.active { color: #e1251b; font-weight: bold; }
 .prod-row { display: flex; gap: 10px; padding: 10px; border-bottom: 1px solid #f5f5f5; }
 .prod-info { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+.prod-img-wrap { position: relative; flex-shrink: 0; }
+/* New product & seckill badges (新品限时标签) */
+.prod-badge {
+  position: absolute;
+  left: 6px;
+  z-index: 2;
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 7px;
+  border-radius: 20px;
+  line-height: 1.4;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+.prod-badge-new { top: 6px; background: #e1251b; }
+.prod-badge-seckill { top: 6px; background: #ff7a18; }
+/* When both badges are present, drop the second one below the first. */
+.prod-badge-new ~ .prod-badge-seckill { top: 30px; }
 .prod-name { font-size: 13px; line-height: 18px; }
 .prod-sub { font-size: 11px; color: #999; }
 .prod-bottom { display: flex; align-items: baseline; gap: 8px; }

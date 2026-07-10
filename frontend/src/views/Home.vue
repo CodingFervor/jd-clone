@@ -86,6 +86,19 @@ function fmt(n) {
   return Number(n).toFixed(2)
 }
 
+// ---- New product & seckill badges (新品限时标签) ----
+// A product is "NEW" if created within the last 7 days.
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+function isNew(p) {
+  if (!p || !p.created_at) return false
+  const created = new Date(p.created_at).getTime()
+  if (isNaN(created)) return false
+  return Date.now() - created < WEEK_MS
+}
+function isSeckill(p) {
+  return !!(p && p.is_seckill)
+}
+
 // Split countdown into 3 monospace blocks for styling.
 const timeBlocks = computed(() => countdown.value.split(':'))
 
@@ -162,7 +175,11 @@ onUnmounted(() => {
       <div class="section-head"><span>为你推荐</span></div>
       <div class="product-grid">
         <div v-for="p in products" :key="p.id" class="product-card" @click="goProduct(p.id)">
-          <van-image width="100%" height="170" :src="p.image" fit="cover" radius="6" />
+          <div class="p-img-wrap">
+            <van-image width="100%" height="170" :src="p.image" fit="cover" radius="6" />
+            <span v-if="isNew(p)" class="p-badge p-badge-new">NEW</span>
+            <span v-if="isSeckill(p)" class="p-badge p-badge-seckill">限时</span>
+          </div>
           <div class="p-name van-multi-ellipsis--l2">{{ p.name }}</div>
           <div class="p-shop">{{ p.shop }}</div>
           <div class="p-bottom">
@@ -263,6 +280,34 @@ onUnmounted(() => {
   border-radius: 8px;
   overflow: hidden;
   padding-bottom: 6px;
+}
+.p-img-wrap {
+  position: relative;
+}
+/* New product & seckill badges (新品限时标签) */
+.p-badge {
+  position: absolute;
+  left: 6px;
+  z-index: 2;
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 7px;
+  border-radius: 20px;
+  line-height: 1.4;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+.p-badge-new {
+  top: 6px;
+  background: #e1251b;
+}
+.p-badge-seckill {
+  top: 6px;
+  background: #ff7a18;
+}
+/* When both badges are present, drop the second one below the first. */
+.p-badge-new ~ .p-badge-seckill {
+  top: 30px;
 }
 .p-name {
   font-size: 13px;
