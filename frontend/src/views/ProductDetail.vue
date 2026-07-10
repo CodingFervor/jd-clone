@@ -81,6 +81,32 @@ const reviewDistBars = computed(() => {
     pct: Math.round((dist[star - 1] / max) * 100),
   }))
 })
+// Review filter tabs (评价筛选标签): tracks the active filter chip and feeds
+// the count badges + the filtered list shown in the v-for below.
+const reviewFilter = ref('all')
+// Each entry carries a `match` predicate applied against a review record, plus
+// a static label; the count is filled in dynamically from the live reviews.
+const REVIEW_FILTERS = [
+  { key: 'all', label: '全部', match: () => true },
+  { key: 'good', label: '好评', match: (r) => Math.round(Number(r.rating) || 0) >= 4 },
+  { key: 'mid', label: '中评', match: (r) => Math.round(Number(r.rating) || 0) === 3 },
+  { key: 'bad', label: '差评', match: (r) => Math.round(Number(r.rating) || 0) <= 2 },
+  { key: 'photo', label: '有图', match: (r) => reviewMedia(r.images).photos.length > 0 },
+]
+// The chips to render: original config plus a live count per filter.
+const reviewFilters = computed(() =>
+  REVIEW_FILTERS.map((f) => ({
+    ...f,
+    count: reviews.value.filter(f.match).length,
+  }))
+)
+// Active filter's predicate (defaults to "all" which matches everything).
+const activeFilter = computed(() => {
+  const f = REVIEW_FILTERS.find((x) => x.key === reviewFilter.value)
+  return f ? f.match : () => true
+})
+// Filtered review list driven by the active chip; used in the v-for loop.
+const filteredReviews = computed(() => reviews.value.filter(activeFilter.value))
 // Spec matrix table (商品规格矩阵表): transforms the SKU list into a table
 // with one column per spec dimension plus price/stock. Only shown when SKUs
 // expose at least 2 parseable dimensions; otherwise the tag selector alone is
@@ -224,6 +250,22 @@ function selectSKU(sku) {
 function currentPrice() {
   return selectedSKU.value ? selectedSKU.value.price : (product.value ? product.value.price : 0)
 }
+// Effective stock: the chosen SKU's stock, else the product's.
+function currentStock() {
+  if (selectedSKU.value && typeof selectedSKU.value.stock === 'number') return selectedSKU.value.stock
+  return product.value && typeof product.value.stock === 'number' ? product.value.stock : 0
+}
+// Stock pressure meter (库存紧张指示): maps the effective stock to a label,
+// color, progress-bar width and whether it should blink. The "flame" emoji
+// shows up for low-stock items to add urgency.
+const stockMeter = computed(() => {
+  const s = currentStock()
+  if (s > 100) return { label: '库存充足', color: '#07c160', bar: 0, blink: false, flame: false }
+  if (s >= 20) return { label: '有货', color: '#07c160', bar: 50, blink: false, flame: false }
+  if (s >= 5) return { label: '库存紧张', color: '#ff976a', bar: 80, blink: false, flame: true }
+  if (s >= 1) return { label: '仅剩' + s + '件', color: '#e1251b', bar: 95, blink: true, flame: true }
+  return { label: '暂时缺货', color: '#999', bar: 0, blink: false, flame: false }
+})
 
 async function doAddCart() {
   if (!checkLogin()) return
@@ -486,6 +528,20 @@ function priceTrend() {
         </tbody>
       </table>
     </div>
+    <!-- 库存紧张指示: visual stock pressure meter driven by the selected SKU's
+         stock (or the product's stock when no SKU is selected) -->
+    <div class="stock-meter" :class="{ blink: stockMeter.blink }">
+      <span class="stock-flame" v-if="stockMeter.flame">🔥</span>
+      <span class="stock-label" :style="{ color: stockMeter.color }">
+        {{ stockMeter.label }}
+      </span>
+      <div v-if="stockMeter.bar" class="stock-bar-track">
+        <div
+          class="stock-bar-fill"
+          :style="{ width: stockMeter.bar + '%', background: stockMeter.color }"
+        ></div>
+      </div>
+    </div>
     <div class="title-block">
       <h2 class="p-title">{{ product.name }}</h2>
       <p class="p-sub">{{ product.subtitle }}</p>
@@ -617,7 +673,17 @@ function priceTrend() {
           </div>
         </div>
       </div>
-      <div v-for="r in reviews" :key="r.id" class="rev-item">
+      <!-- 评价筛选标签: horizontal pill chips to filter reviews by rating/photos -->
+      <div v-if="reviewStats.total" class="rev-filters">
+        <span
+          v-for="f in reviewFilters"
+          :key="f.key"
+          class="rev-filter-chip"
+          :class="{ active: reviewFilter === f.key }"
+          @click="reviewFilter = f.key"
+        >{{ f.label }}({{ f.count }})</span>
+      </div>
+      <div v-for="r in filteredReviews" :key="r.id" class="rev-item">
         <div class="rev-user">
           <span>{{ r.username }}</span>
           <van-rate v-model="r.rating" readonly size="12" />
@@ -647,6 +713,7 @@ function priceTrend() {
         </div>
       </div>
       <van-empty v-if="!reviews.length" description="暂无评价" />
+      <van-empty v-else-if="!filteredReviews.length" description="该筛选下暂无评价" />
     </div>
 
     <!-- Related products (看了又看) -->
@@ -806,6 +873,20 @@ function priceTrend() {
 .rs-bar-track { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
 .rs-bar-fill { height: 100%; background: linear-gradient(90deg, #ff9800, #e1251b); border-radius: 4px; }
 .rs-bar-count { width: 20px; text-align: right; }
+/* Review filter tabs (评价筛选标签) — horizontal scrollable pills */
+.rev-filters { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 4px; border-top: 1px solid #f5f5f5; -webkit-overflow-scrolling: touch; }
+.rev-filters::-webkit-scrollbar { display: none; }
+.rev-filter-chip { flex-shrink: 0; padding: 5px 14px; background: #f7f7f7; border: 1px solid #eee; border-radius: 14px; font-size: 13px; color: #333; cursor: pointer; white-space: nowrap; }
+.rev-filter-chip.active { background: #e1251b; border-color: #e1251b; color: #fff; font-weight: 500; }
+/* Stock pressure meter (库存紧张指示) */
+.stock-meter { display: flex; align-items: center; gap: 8px; background: #fff; padding: 10px 16px; border-top: 1px solid #f5f5f5; }
+.stock-flame { font-size: 14px; line-height: 1; }
+.stock-label { font-size: 13px; font-weight: 500; }
+.stock-bar-track { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; max-width: 200px; }
+.stock-bar-fill { height: 100%; border-radius: 4px; transition: width .3s; }
+.stock-meter.blink .stock-label { animation: stock-blink 1s steps(2, start) infinite; }
+.stock-meter.blink .stock-bar-fill { animation: stock-blink 1s steps(2, start) infinite; }
+@keyframes stock-blink { 50% { opacity: .35; } }
 .rev-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }
