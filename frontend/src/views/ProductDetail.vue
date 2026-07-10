@@ -29,6 +29,11 @@ const showReview = ref(false)
 const reviewRating = ref(5)
 const reviewContent = ref('')
 const reviewImages = ref([])
+// Video clip URL attached to a review (视频评价). Optional; stored alongside
+// the photos using the "video:" prefix convention in the images field.
+const reviewVideo = ref('')
+// Toggle the video URL input box inside the review form.
+const showVideoInput = ref(false)
 const favorited = ref(false)
 // Build the gallery list from the product's images field (comma-separated),
 // falling back to the single main image.
@@ -194,12 +199,20 @@ async function submitReview() {
     showToast('请输入评价内容')
     return
   }
+  // Combine photos and the optional video clip into one images field.
+  // Video URLs are prefixed with "video:" so the display layer can tell them
+  // apart from photos (e.g. "a.jpg,b.jpg,video:https://...").
+  const parts = [...reviewImages.value]
+  const vid = reviewVideo.value.trim()
+  if (vid) parts.push('video:' + vid)
   try {
-    const rv = await createReview({ product_id: product.value.id, rating: reviewRating.value, content: reviewContent.value, images: reviewImages.value.join(',') })
+    const rv = await createReview({ product_id: product.value.id, rating: reviewRating.value, content: reviewContent.value, images: parts.join(',') })
     reviews.value.unshift(rv)
     showReview.value = false
     reviewContent.value = ''
     reviewImages.value = []
+    reviewVideo.value = ''
+    showVideoInput.value = false
     showSuccessToast('评价成功')
   } catch (e) {
     showToast('请先登录')
@@ -235,6 +248,24 @@ async function doUseful(r) {
 }
 function fmt(n) {
   return Number(n).toFixed(2)
+}
+// Parse a review's images field into photos and video entries.
+// Photos have no prefix; video URLs are prefixed with "video:".
+// Returns { photos: [], videos: [] } with plain URL strings.
+function reviewMedia(images) {
+  const photos = []
+  const videos = []
+  if (!images) return { photos, videos }
+  for (const part of String(images).split(',')) {
+    const s = part.trim()
+    if (!s) continue
+    if (s.startsWith('video:')) {
+      videos.push(s.slice('video:'.length))
+    } else {
+      photos.push(s)
+    }
+  }
+  return { photos, videos }
 }
 function goProduct(id) {
   router.replace('/product/' + id)
@@ -467,7 +498,15 @@ function priceTrend() {
         </div>
         <div class="rev-content">{{ r.content }}</div>
         <div v-if="r.images" class="rev-photos">
-          <van-image v-for="(img, i) in r.images.split(',')" :key="i" width="72" height="72" radius="6" :src="img" fit="cover" />
+          <van-image v-for="(img, i) in reviewMedia(r.images).photos" :key="'p' + i" width="72" height="72" radius="6" :src="img" fit="cover" />
+          <video
+            v-for="(vid, i) in reviewMedia(r.images).videos"
+            :key="'v' + i"
+            :src="vid"
+            controls
+            preload="metadata"
+            class="rev-video"
+          ></video>
         </div>
         <div class="rev-actions">
           <span class="rev-useful-btn" @click="doUseful(r)"><van-icon name="good-job-o" /> 有用 ({{ r.useful || 0 }})</span>
@@ -534,9 +573,16 @@ function priceTrend() {
         <van-rate v-model="reviewRating" />
         <van-field v-model="reviewContent" type="textarea" placeholder="说说你的使用感受" rows="3" />
         <div class="rev-upload">
-          <van-uploader :after-read="onUploadReviewImage" accept="image/*" multiple :preview-image="false">
-            <van-button icon="photo-o" size="small" plain round>添加晒图</van-button>
-          </van-uploader>
+          <div class="rev-upload-row">
+            <van-uploader :after-read="onUploadReviewImage" accept="image/*" multiple :preview-image="false">
+              <van-button icon="photo-o" size="small" plain round>添加晒图</van-button>
+            </van-uploader>
+            <van-button icon="video-o" size="small" plain round @click="showVideoInput = !showVideoInput">{{ showVideoInput ? '收起视频' : '添加视频' }}</van-button>
+          </div>
+          <div v-if="showVideoInput" class="rev-video-input">
+            <van-field v-model="reviewVideo" placeholder="粘贴视频链接 https://..." clearable />
+            <small class="rev-video-hint">演示功能：直接粘贴视频地址即可</small>
+          </div>
           <div v-if="reviewImages.length" class="rev-imgs">
             <div v-for="(img, i) in reviewImages" :key="i" class="rev-img-wrap">
               <van-image width="60" height="60" radius="6" :src="img" fit="cover" />
@@ -620,6 +666,7 @@ function priceTrend() {
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }
 .rev-photos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rev-video { width: 200px; height: auto; max-height: 200px; border-radius: 6px; background: #000; object-fit: contain; }
 .rev-actions { margin-top: 6px; }
 .rev-useful-btn { color: #999; font-size: 12px; cursor: pointer; }
 .rev-useful-btn:active { color: #e1251b; }
@@ -632,6 +679,10 @@ function priceTrend() {
 .rev-form h3 { text-align: center; margin-bottom: 16px; }
 .rev-form .van-field { margin: 12px 0; border: 1px solid #eee; }
 .rev-upload { margin: 8px 0; }
+.rev-upload-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.rev-video-input { margin-top: 8px; }
+.rev-video-input .van-field { border: 1px solid #eee; border-radius: 6px; }
+.rev-video-hint { color: #999; font-size: 11px; display: block; margin-top: 4px; }
 .rev-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .rev-img-wrap { position: relative; }
 .rev-img-del { position: absolute; top: -6px; right: -6px; background: #e1251b; color: #fff; border-radius: 50%; padding: 2px; font-size: 12px; }

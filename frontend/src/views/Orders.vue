@@ -7,6 +7,13 @@ import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder, addToCart
 const router = useRouter()
 const orders = ref([])
 const loading = ref(true)
+// Expanded order lifecycle timelines: a Set of order IDs whose timeline is shown.
+// We reassign a new Set on toggle so Vue reliably re-renders.
+const expandedOrders = ref(new Set())
+// Numeric rank for each order status, used to decide which lifecycle stages
+// are already reached. 'cancelled' is ranked below 'pending' so only the
+// creation stage lights up for it.
+const STATUS_RANK = { pending: 0, paid: 1, shipped: 2, completed: 3, cancelled: -1 }
 
 // Order timeout countdown: pending orders expire 30 minutes after creation.
 const TIMEOUT_MS = 30 * 60 * 1000
@@ -181,6 +188,47 @@ function groupPackages(items) {
   }
   return groups
 }
+
+// Toggle the expanded/collapsed state of an order's lifecycle timeline.
+// A new Set is created so Vue detects the reactive change reliably.
+function toggleExpand(o) {
+  const next = new Set(expandedOrders.value)
+  if (next.has(o.id)) {
+    next.delete(o.id)
+  } else {
+    next.add(o.id)
+  }
+  expandedOrders.value = next
+}
+// Build the lifecycle stages for an order. The first stage (下单成功) always
+// shows its created_at timestamp; later stages show "已完成" because we don't
+// track per-stage timestamps. The highest reached stage is highlighted as the
+// current (red) stage.
+function orderStages(o) {
+  const rank = STATUS_RANK[o.status] ?? 0
+  // Format created_at as "YYYY-MM-DD HH:mm".
+  const fmtTime = (raw) => {
+    const d = new Date(raw)
+    if (Number.isNaN(d.getTime())) return '已完成'
+    const p = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+  }
+  const stages = [
+    { icon: '📝', label: '下单成功', threshold: 0, time: fmtTime(o.created_at) },
+    { icon: '💰', label: '已付款', threshold: 1, time: '已完成' },
+    { icon: '📦', label: '已发货', threshold: 2, time: '已完成' },
+    { icon: '✅', label: '已完成', threshold: 3, time: '已完成' },
+  ]
+  // The current stage is the highest threshold not exceeding the status rank.
+  const currentThreshold = stages.map((s) => s.threshold).filter((t) => t <= rank).pop()
+  return stages.map((s) => ({
+    icon: s.icon,
+    label: s.label,
+    time: s.time,
+    done: rank >= s.threshold,
+    isCurrent: s.threshold === currentThreshold,
+  }))
+}
 </script>
 
 <template>
@@ -225,6 +273,22 @@ function groupPackages(items) {
             <van-button v-if="['shipped','completed'].includes(o.status)" size="small" type="danger" round @click="confirm(o)">确认收货</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请售后</van-button>
+            <van-button size="small" plain round @click="toggleExpand(o)">{{ expandedOrders.has(o.id) ? '收起进度' : '查看进度' }}</van-button>
+          </div>
+        </div>
+        <div v-if="expandedOrders.has(o.id)" class="o-timeline">
+          <div
+            v-for="(st, si) in orderStages(o)"
+            :key="si"
+            class="ot-item"
+            :class="{ 'is-current': st.isCurrent, 'is-done': st.done && !st.isCurrent }"
+          >
+            <div class="ot-dot">{{ st.icon }}</div>
+            <div v-if="si < orderStages(o).length - 1" class="ot-line"></div>
+            <div class="ot-body">
+              <div class="ot-label">{{ st.label }}</div>
+              <div class="ot-time">{{ st.time }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -251,4 +315,19 @@ function groupPackages(items) {
 .oi-price { color: #999; font-size: 12px; margin-top: 4px; }
 .o-foot { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #f5f5f5; margin-top: 8px; font-size: 13px; }
 .o-actions { display: flex; gap: 8px; }
+/* Order lifecycle timeline (订单全流程时间线) */
+.o-timeline { margin-top: 12px; padding: 12px 8px 4px; background: #fafafa; border-radius: 8px; }
+.ot-item { position: relative; display: flex; gap: 12px; padding-bottom: 16px; }
+.ot-item:last-child { padding-bottom: 0; }
+.ot-dot { position: relative; z-index: 1; width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 2px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+.ot-item.is-done .ot-dot { border-color: #07c160; background: #f0fff4; }
+.ot-item.is-current .ot-dot { border-color: #e1251b; background: #fff5f5; box-shadow: 0 0 0 4px rgba(225, 37, 27, 0.12); }
+.ot-line { position: absolute; left: 12px; top: 26px; width: 2px; height: calc(100% - 14px); background: #ddd; transform: translateX(-1px); }
+.ot-item.is-done .ot-line { background: #07c160; }
+.ot-body { padding-top: 2px; }
+.ot-label { font-size: 14px; color: #999; }
+.ot-item.is-done .ot-label { color: #333; }
+.ot-item.is-current .ot-label { color: #e1251b; font-weight: 600; }
+.ot-time { font-size: 12px; color: #bbb; margin-top: 2px; }
+.ot-item.is-current .ot-time { color: #e1251b; }
 </style>
