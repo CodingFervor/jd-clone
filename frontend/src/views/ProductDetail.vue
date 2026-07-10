@@ -109,6 +109,55 @@ const specMatrix = computed(() => {
   }
   return { dimNames, rows: parsed }
 })
+// Eco Score (环保评分): deterministic 0-100 score derived from a hash of
+// the product id so the same product always shows the same score. Used to
+// render a color-coded environmental impact badge in the spec cell group.
+function hashId(str) {
+  let h = 0
+  for (let i = 0; i < str.length; i++) {
+    h = (h << 5) - h + str.charCodeAt(i)
+    h |= 0
+  }
+  return Math.abs(h)
+}
+const ecoScore = computed(() => {
+  const id = product.value ? product.value.id : 0
+  return hashId(String(id)) % 101
+})
+const ecoLevel = computed(() => {
+  const s = ecoScore.value
+  if (s >= 90) return '优秀'
+  if (s >= 70) return '良好'
+  if (s >= 60) return '合格'
+  return '一般'
+})
+const ecoColor = computed(() => {
+  const s = ecoScore.value
+  if (s >= 90) return '#07c160' // green
+  if (s >= 70) return '#95d475' // light-green
+  if (s >= 60) return '#ff976a' // orange
+  return '#999' // gray
+})
+// Brand Story (品牌故事): a collapsible section above the description. The
+// story text is templated from the shop name; the three "品牌理念" tags are
+// deterministically picked from a pool based on the product id hash.
+const brandStoryCollapsed = ref(true)
+const brandStory = computed(() => {
+  const shop = product.value && product.value.shop ? product.value.shop : '本品牌'
+  return `${shop}致力于为消费者提供优质的产品和服务。自创立以来，始终坚持品质第一的理念，用心打磨每一个细节。`
+})
+const BRAND_TAG_POOL = ['品质保证', '正品行货', '售后无忧', '极速配送', '用户至上', '匠心工艺']
+const brandTags = computed(() => {
+  const id = product.value ? product.value.id : 0
+  const seed = hashId(String(id))
+  const picked = []
+  const pool = BRAND_TAG_POOL.slice()
+  for (let i = 0; i < 3 && pool.length; i++) {
+    const idx = (seed + i * 7) % pool.length
+    picked.push(pool.splice(idx, 1)[0])
+  }
+  return picked
+})
 async function onUploadReviewImage(item) {
   try {
     const res = await uploadImage(item.file)
@@ -450,6 +499,16 @@ function priceTrend() {
           <span class="delivery-value">🚚 {{ deliveryEstimate }}</span>
         </template>
       </van-cell>
+      <van-cell>
+        <template #title>
+          <span class="eco-title"><van-icon name="passed" /> 环保评分</span>
+        </template>
+        <template #value>
+          <span class="eco-value" :style="{ color: ecoColor }">
+            🌱 {{ ecoScore }} · {{ ecoLevel }}
+          </span>
+        </template>
+      </van-cell>
       <van-cell :title="restockSubscribed ? '到货通知已开启' : '到货通知'" is-link @click="toggleRestock">
         <template #right-icon>
           <van-switch :model-value="restockSubscribed" size="20" @click.stop="toggleRestock" active-color="#e1251b" />
@@ -475,6 +534,20 @@ function priceTrend() {
         <div v-for="(b, i) in priceBars()" :key="i" class="ph-bar-col">
           <div class="ph-bar" :style="{ height: b.height + '%' }"></div>
           <span class="ph-date">{{ b.date }}</span>
+        </div>
+      </div>
+    </div>
+    <!-- Brand Story (品牌故事) -->
+    <div class="brand-story">
+      <div class="bs-head" @click="brandStoryCollapsed = !brandStoryCollapsed">
+        <span>品牌故事</span>
+        <span class="bs-toggle">{{ brandStoryCollapsed ? '展开' : '收起' }} <van-icon :name="brandStoryCollapsed ? 'arrow-down' : 'arrow-up'" /></span>
+      </div>
+      <div v-show="!brandStoryCollapsed" class="bs-body">
+        <p class="bs-text">{{ brandStory }}</p>
+        <div class="bs-tags">
+          <span class="bs-tag-label">品牌理念</span>
+          <van-tag v-for="t in brandTags" :key="t" plain round color="#e1251b">{{ t }}</van-tag>
         </div>
       </div>
     </div>
@@ -691,7 +764,18 @@ function priceTrend() {
 .p-title { font-size: 17px; line-height: 24px; }
 .p-sub { color: #999; font-size: 13px; margin-top: 4px; }
 .delivery-value { color: #e1251b; font-weight: 500; }
+/* Eco score badge (环保评分) */
+.eco-title { display: inline-flex; align-items: center; gap: 4px; }
+.eco-value { font-weight: bold; }
 .desc, .reviews { background: #fff; margin-top: 8px; padding: 12px 16px; }
+/* Brand Story (品牌故事) */
+.brand-story { background: #fff; margin-top: 8px; padding: 12px 16px; }
+.bs-head { display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: bold; }
+.bs-toggle { font-size: 13px; font-weight: normal; color: #e1251b; display: inline-flex; align-items: center; gap: 2px; }
+.bs-body { padding-top: 10px; }
+.bs-text { font-size: 13px; color: #666; line-height: 20px; }
+.bs-tags { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.bs-tag-label { font-size: 12px; color: #999; }
 .price-history { background: #fff; margin-top: 8px; padding: 12px 16px; }
 .ph-head { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: bold; margin-bottom: 10px; }
 .ph-stats { font-size: 12px; color: #666; font-weight: normal; }
