@@ -28,6 +28,7 @@ const routes = [
   { path: '/presale', name: 'presale', component: () => import('../views/Presale.vue') },
   { path: '/shop/:name', name: 'shopRatings', component: () => import('../views/ShopRatings.vue') },
   { path: '/bundles', name: 'bundles', component: () => import('../views/Bundles.vue') },
+  { path: '/gift-card', name: 'giftCard', component: () => import('../views/GiftCard.vue'), meta: { auth: true } },
   { path: '/admin', name: 'admin', component: () => import('../views/Admin.vue') },
 ]
 

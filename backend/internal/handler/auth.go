@@ -44,6 +44,7 @@ type Handler struct {
 	Invoice        *repository.InvoiceRepo
 	TieredDiscount *repository.TieredDiscountRepo
 	Lottery        *repository.LotteryRepo
+	GiftCard       *repository.GiftCardRepo
 	jwtKey         []byte
 }
 

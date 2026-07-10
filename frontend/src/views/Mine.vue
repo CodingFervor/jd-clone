@@ -173,6 +173,7 @@ function logout() {
       <van-cell title="预售专区" is-link @click="router.push('/presale')" icon="underway-o" />
       <van-cell title="售后服务" is-link @click="router.push('/refunds')" icon="after-sale" />
       <van-cell title="优惠券" is-link @click="router.push('/coupons')" icon="coupon-o" />
+      <van-cell title="礼品卡" is-link @click="router.push('/gift-card')" icon="card" />
       <van-cell title="收货地址" is-link icon="location-o" @click="router.push('/addresses')" />
       <van-cell title="编辑资料" is-link icon="edit" @click="router.push('/profile')" />
       <van-cell title="PLUS会员" is-link icon="diamond-o" @click="showToast('演示功能')" />

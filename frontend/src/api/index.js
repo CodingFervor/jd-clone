@@ -172,4 +172,9 @@ export const getTieredDiscounts = () => http.get('/tiered-discounts').then((r) =
 export const getPrizes = () => http.get('/lottery/prizes').then((r) => r.data)
 export const spinLottery = () => http.post('/lottery/spin').then((r) => r.data)
 
+// ---- Gift cards (礼品卡) ----
+export const generateGiftCard = (amount) => http.post('/gift-cards/generate', { amount }).then((r) => r.data)
+export const redeemGiftCard = (code) => http.post('/gift-cards/redeem', { code }).then((r) => r.data)
+export const getMyGiftCards = () => http.get('/gift-cards').then((r) => r.data.data)
+
 export { errMsg }

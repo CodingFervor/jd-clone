@@ -1,12 +1,26 @@
 package repository
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/CodingFervor/jd-clone/backend/internal/model"
 )
+
+// cryptoRandIntn returns a uniform non-negative crypto random int in [0, n).
+func cryptoRandIntn(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	i, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if err != nil {
+		return 0
+	}
+	return int(i.Int64())
+}
 
 // ===================== User =====================
 
@@ -942,6 +956,109 @@ func (r *LotteryRepo) SeedPrizes() {
 			`INSERT INTO lottery_prizes (name, points_cost, prize, probability, icon) VALUES (?,?,?,?,?)`,
 			it.name, 50, it.prize, it.probability, it.icon)
 	}
+}
+
+// ===================== Gift cards (礼品卡) =====================
+
+type GiftCardRepo struct{ db *sql.DB }
+
+func NewGiftCardRepo(db *sql.DB) *GiftCardRepo { return &GiftCardRepo{db: db} }
+
+const giftCardCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+// genCode produces a random 12-character alphanumeric code using a
+// confusable-free alphabet (no 0/O/1/I). It retries on a UNIQUE collision.
+func (r *GiftCardRepo) genCode() (string, error) {
+	for attempt := 0; attempt < 8; attempt++ {
+		buf := make([]byte, 12)
+		for i := range buf {
+			buf[i] = giftCardCodeAlphabet[cryptoRandIntn(len(giftCardCodeAlphabet))]
+		}
+		code := string(buf)
+		var exists int
+		_ = r.db.QueryRow(`SELECT 1 FROM gift_cards WHERE code=? LIMIT 1`, code).Scan(&exists)
+		if exists == 0 {
+			return code, nil
+		}
+	}
+	return "", fmt.Errorf("生成礼品卡号失败，请重试")
+}
+
+// Generate creates a new unused gift card with the given face value and returns it.
+func (r *GiftCardRepo) Generate(amount float64) (*model.GiftCard, error) {
+	if amount <= 0 {
+		return nil, fmt.Errorf("礼品卡面值必须大于0")
+	}
+	code, err := r.genCode()
+	if err != nil {
+		return nil, err
+	}
+	gc := &model.GiftCard{Code: code, Amount: amount, UserID: 0, Status: "unused"}
+	res, err := r.db.Exec(
+		`INSERT INTO gift_cards (code, amount, user_id, status) VALUES (?,?,?,?)`,
+		gc.Code, gc.Amount, gc.UserID, gc.Status)
+	if err != nil {
+		return nil, err
+	}
+	gc.ID, _ = res.LastInsertId()
+	return gc, nil
+}
+
+// Redeem marks a card as used by userID. It enforces single-use atomically and
+// returns an error if the card is missing or already redeemed.
+func (r *GiftCardRepo) Redeem(code string, userID int64) (*model.GiftCard, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	gc := &model.GiftCard{}
+	err = tx.QueryRow(
+		`SELECT id, code, amount, user_id, status, created_at FROM gift_cards WHERE code=?`, code,
+	).Scan(&gc.ID, &gc.Code, &gc.Amount, &gc.UserID, &gc.Status, &gc.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("礼品卡不存在")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if gc.Status != "unused" {
+		return nil, fmt.Errorf("礼品卡已被使用")
+	}
+	res, err := tx.Exec(
+		`UPDATE gift_cards SET status='used', user_id=? WHERE id=? AND status='unused'`,
+		userID, gc.ID)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, fmt.Errorf("礼品卡已被使用")
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	gc.Status = "used"
+	gc.UserID = userID
+	return gc, nil
+}
+
+// ListByUser returns the cards redeemed by a user, newest first.
+func (r *GiftCardRepo) ListByUser(userID int64) ([]model.GiftCard, error) {
+	rows, err := r.db.Query(
+		`SELECT id, code, amount, user_id, status, created_at FROM gift_cards WHERE user_id=? ORDER BY id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.GiftCard{}
+	for rows.Next() {
+		var gc model.GiftCard
+		if err := rows.Scan(&gc.ID, &gc.Code, &gc.Amount, &gc.UserID, &gc.Status, &gc.CreatedAt); err == nil {
+			out = append(out, gc)
+		}
+	}
+	return out, nil
 }
 
 // ===================== Seckill deals (秒杀活动) =====================

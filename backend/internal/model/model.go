@@ -201,6 +201,16 @@ type LotteryPrize struct {
 	Icon        string `json:"icon"`
 }
 
+// GiftCard is a prepaid card redeemable for store credit (礼品卡).
+type GiftCard struct {
+	ID        int64     `json:"id"`
+	Code      string    `json:"code"`
+	Amount    float64   `json:"amount"`
+	UserID    int64     `json:"user_id"`
+	Status    string    `json:"status"` // unused, used
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // SeckillDeal is a time-boxed flash sale with a separate stock pool.
 type SeckillDeal struct {
 	ID           int64     `json:"id"`

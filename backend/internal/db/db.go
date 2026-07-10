@@ -410,6 +410,17 @@ func createTables() error {
 			probability INTEGER NOT NULL DEFAULT 10,
 			icon TEXT NOT NULL DEFAULT '🎁'
 		)`,
+		// Gift cards: prepaid cards redeemable for store credit (礼品卡).
+		`CREATE TABLE IF NOT EXISTS gift_cards (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			code TEXT NOT NULL UNIQUE,
+			amount REAL NOT NULL DEFAULT 0,
+			user_id INTEGER NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'unused',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_gift_cards_user ON gift_cards(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_gift_cards_code ON gift_cards(code)`,
 		// FTS5 full-text search virtual table over products.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		// Triggers to keep the FTS index in sync with products.
