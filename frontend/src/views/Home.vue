@@ -103,6 +103,21 @@ function isSeckill(p) {
   return !!(p && p.is_seckill)
 }
 
+// ---- Price trend tag (价格趋势图标) ----
+// Returns the inline trend tag for a product, shown next to its price.
+// Priority: seckill (⚡秒杀, orange) > price drop (📉降价, green) > none.
+// A "drop" only shows when the original price is more than 10% above the
+// current price; when original_price <= price (or unset) nothing renders.
+function priceTrendTag(p) {
+  if (!p) return null
+  if (isSeckill(p)) return 'seckill'
+  const orig = Number(p.original_price)
+  const cur = Number(p.price)
+  if (!orig || orig <= cur) return null
+  if (orig > cur * 1.1) return 'drop'
+  return null
+}
+
 // Split countdown into 3 monospace blocks for styling.
 const timeBlocks = computed(() => countdown.value.split(':'))
 
@@ -242,7 +257,11 @@ onUnmounted(() => {
           <div class="p-name van-multi-ellipsis--l2">{{ p.name }}</div>
           <div class="p-shop">{{ p.shop }}</div>
           <div class="p-bottom">
-            <span class="price">¥{{ fmt(p.price) }}</span>
+            <span class="price-wrap">
+              <span class="price">¥{{ fmt(p.price) }}</span>
+              <span v-if="priceTrendTag(p) === 'seckill'" class="trend-tag trend-seckill">⚡秒杀</span>
+              <span v-else-if="priceTrendTag(p) === 'drop'" class="trend-tag trend-drop">📉降价</span>
+            </span>
             <span class="sales">{{ p.sales }}人付款</span>
           </div>
         </div>
@@ -434,6 +453,33 @@ onUnmounted(() => {
 }
 .p-bottom .price {
   font-size: 16px;
+}
+/* Price trend tags (价格趋势图标) — small inline tags next to the price */
+.price-wrap {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.trend-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.trend-drop {
+  color: #07c160;
+  background: #f0fff4;
+  border: 1px solid #b7eb8f;
+}
+.trend-seckill {
+  color: #ff7a18;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
 }
 .sales {
   font-size: 11px;

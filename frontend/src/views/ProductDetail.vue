@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast, showDialog } from 'vant'
 import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA, markReviewUseful, subscribePriceAlert, checkPriceAlert } from '../api'
@@ -274,6 +274,8 @@ onMounted(async () => {
     showToast('商品不存在')
   } finally {
     loading.value = false
+    // Wire up the sticky tab IntersectionObserver once the DOM has rendered.
+    nextTick(() => setupSectionObserver())
   }
 })
 
@@ -511,6 +513,80 @@ function priceTrend() {
   if (last > first) return 'up'
   return 'flat'
 }
+
+// ---- Sticky detail tab navigation (商品详情Tab导航) ----
+// Tabs: 商品 | 评价 | 问答 | 推荐. Clicking a tab smooth-scrolls to its
+// section; an IntersectionObserver keeps the active tab in sync as the user
+// scrolls. We intentionally guard everything so that if a section is missing
+// the tab still renders but degrades gracefully.
+const DETAIL_TABS = [
+  { key: 'product', label: '商品', sectionId: 'sec-product' },
+  { key: 'reviews', label: '评价', sectionId: 'sec-reviews' },
+  { key: 'qa', label: '问答', sectionId: 'sec-qa' },
+  { key: 'recommend', label: '推荐', sectionId: 'sec-recommend' },
+]
+const activeTab = ref('product')
+let sectionObserver = null
+// Track which sections are currently intersecting so scroll-driven highlight
+// picks the topmost visible one.
+const visibleSections = ref(new Set())
+
+function scrollToTab(tab) {
+  const el = document.getElementById(tab.sectionId)
+  if (!el) return
+  // Offset for the fixed nav-bar (~46px) + sticky tabs (~40px).
+  const offset = 90
+  const top = el.getBoundingClientRect().top + window.scrollY - offset
+  // Temporarily ignore observer updates during programmatic scroll so the
+  // clicked tab stays active until scrolling settles.
+  pauseObserver = true
+  activeTab.value = tab.key
+  window.scrollTo({ top, behavior: 'smooth' })
+  setTimeout(() => { pauseObserver = false }, 600)
+}
+
+let pauseObserver = false
+
+function setupSectionObserver() {
+  if (typeof IntersectionObserver === 'undefined') return
+  sectionObserver = new IntersectionObserver(
+    (entries) => {
+      if (pauseObserver) return
+      const next = new Set(visibleSections.value)
+      let changed = false
+      for (const e of entries) {
+        const id = e.target.id
+        if (e.isIntersecting) {
+          if (!next.has(id)) { next.add(id); changed = true }
+        } else {
+          if (next.has(id)) { next.delete(id); changed = true }
+        }
+      }
+      if (changed) visibleSections.value = next
+      // Highlight the first tab (in DOM order) whose section is visible.
+      for (const t of DETAIL_TABS) {
+        if (visibleSections.value.has(t.sectionId)) {
+          activeTab.value = t.key
+          return
+        }
+      }
+    },
+    // Trigger when a section's top crosses ~120px down from the viewport top
+    // (accounting for nav bar + sticky tabs) to the bottom edge.
+    { rootMargin: '-120px 0px -70% 0px', threshold: 0 }
+  )
+  for (const t of DETAIL_TABS) {
+    const el = document.getElementById(t.sectionId)
+    if (el) sectionObserver.observe(el)
+  }
+}
+
+onUnmounted(() => {
+  if (sectionObserver) {
+    sectionObserver.disconnect()
+    sectionObserver = null
+  }
+})
 </script>
 
 <template>
@@ -621,6 +697,19 @@ function priceTrend() {
         </template>
       </van-cell>
     </van-cell-group>
+    <!-- Sticky detail tab navigation (商品详情Tab导航) -->
+    <div class="detail-tabs-sticky">
+      <div class="detail-tabs">
+        <span
+          v-for="t in DETAIL_TABS"
+          :key="t.key"
+          class="detail-tab"
+          :class="{ active: activeTab === t.key }"
+          @click="scrollToTab(t)"
+        >{{ t.label }}</span>
+      </div>
+    </div>
+
     <!-- Price history (比价历史) -->
     <div v-if="priceHistory.length" class="price-history">
       <div class="ph-head">
@@ -657,7 +746,7 @@ function priceTrend() {
       </div>
     </div>
     <!-- Brand Story (品牌故事) -->
-    <div class="brand-story">
+    <div id="sec-product" class="brand-story">
       <div class="bs-head" @click="brandStoryCollapsed = !brandStoryCollapsed">
         <span>品牌故事</span>
         <span class="bs-toggle">{{ brandStoryCollapsed ? '展开' : '收起' }} <van-icon :name="brandStoryCollapsed ? 'arrow-down' : 'arrow-up'" /></span>
@@ -675,7 +764,7 @@ function priceTrend() {
       <p>{{ product.description }}</p>
     </div>
     <!-- Product Q&A (商品问答) -->
-    <div class="qa-section">
+    <div id="sec-qa" class="qa-section">
       <div class="rev-head">
         <span>商品问答 ({{ qaList.length }})</span>
         <van-button size="mini" type="danger" plain @click="showQA = true">提问</van-button>
@@ -742,7 +831,7 @@ function priceTrend() {
       </div>
     </van-popup>
 
-    <div class="reviews">
+    <div id="sec-reviews" class="reviews">
       <div class="rev-head">
         <span>商品评价 ({{ reviews.length }})</span>
         <van-button size="mini" type="danger" plain @click="showReview = true">写评价</van-button>
@@ -806,7 +895,7 @@ function priceTrend() {
     </div>
 
     <!-- Related products (看了又看) -->
-    <div v-if="relatedProducts.length" class="related-section">
+    <div v-if="relatedProducts.length" id="sec-recommend" class="related-section">
       <div class="rs-head">看了又看</div>
       <div class="rs-scroll">
         <div v-for="rp in relatedProducts" :key="rp.id" class="rs-card" @click="goProduct(rp.id)">
@@ -950,6 +1039,43 @@ function priceTrend() {
 .desc, .reviews { background: #fff; margin-top: 8px; padding: 12px 16px; }
 /* Brand Story (品牌故事) */
 .brand-story { background: #fff; margin-top: 8px; padding: 12px 16px; }
+/* Sticky detail tab navigation (商品详情Tab导航) */
+.detail-tabs-sticky {
+  position: sticky;
+  top: 46px; /* sit just below the fixed nav-bar */
+  z-index: 10;
+  background: #fff;
+  margin-top: 8px;
+}
+.detail-tabs {
+  display: flex;
+  border-bottom: 1px solid #f5f5f5;
+}
+.detail-tab {
+  flex: 1;
+  text-align: center;
+  padding: 12px 0;
+  font-size: 14px;
+  color: #666;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s ease;
+}
+.detail-tab.active {
+  color: #e1251b;
+  font-weight: 600;
+}
+.detail-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: #e1251b;
+}
 .bs-head { display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: bold; }
 .bs-toggle { font-size: 13px; font-weight: normal; color: #e1251b; display: inline-flex; align-items: center; gap: 2px; }
 .bs-body { padding-top: 10px; }

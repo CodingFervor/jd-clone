@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getCart, updateCart, deleteCart, createOrder, getProducts, addToCart, toggleFavorite } from '../api'
+import { getCart, updateCart, deleteCart, createOrder, getProducts, addToCart, toggleFavorite, getTieredDiscounts } from '../api'
 
 // ---- Group buy invite (好友拼单邀请) ----
 // A festive popup that generates shareable invite text for the current cart,
@@ -98,6 +98,8 @@ async function load() {
     // Load recommendations after the cart is loaded so the "猜你喜欢" section
     // is populated while / above the cart items.
     await loadRecommendations()
+    // Load tiered-discount tiers (best-effort) to power the smart quantity hints.
+    loadTiers()
   } catch (e) {
     if (e.response?.status === 401) router.replace('/login')
   } finally {
@@ -201,6 +203,83 @@ function fmt(n) {
 function isPriceDrop(it) {
   return Number(it.original_price) > Number(it.price) * 1.1
 }
+
+// ---- Smart Quantity Selector (智能数量选择) ----
+// Store-wide spend-X-get-Y-off tiers loaded from the API. Each tier is
+// { threshold, discount }. When tiers are missing/unloaded we gracefully fall
+// back to the plain quantity stepper (tiersLoaded stays false).
+const tiers = ref([])
+const tiersLoaded = ref(false)
+
+// Selected cart total in yuan (sum of selected items' price * quantity).
+const selectedSum = computed(() =>
+  items.value
+    .filter((i) => i.selected === 1)
+    .reduce((s, i) => s + Number(i.price) * Number(i.quantity || 1), 0)
+)
+
+// Sort tiers ascending by threshold so we can scan in order.
+const sortedTiers = computed(() =>
+  [...tiers.value].sort((a, b) => Number(a.threshold) - Number(b.threshold))
+)
+
+// The next tier the selected total has not yet reached. null if none or
+// the total already meets the highest tier.
+const nextTier = computed(() => {
+  if (!tiersLoaded.value || !sortedTiers.value.length) return null
+  return sortedTiers.value.find((t) => selectedSum.value < Number(t.threshold)) || null
+})
+
+// The best (highest) tier the selected total currently meets, if any.
+const metTier = computed(() => {
+  if (!tiersLoaded.value || !sortedTiers.value.length) return null
+  let met = null
+  for (const t of sortedTiers.value) {
+    if (selectedSum.value >= Number(t.threshold)) met = t
+  }
+  return met
+})
+
+// Whether the current selected total already satisfies at least one tier.
+const hasMetTier = computed(() => !!metTier.value)
+
+// For a given cart line, decide whether to surface a "买2件更划算" style hint.
+// The hint appears when adding a small number of this item (default 2) would
+// push the selected total into the next tier, i.e. the gap is within this
+// item's line value. Returns an object describing the suggestion or null.
+function itemTierHint(it) {
+  if (!tiersLoaded.value || !nextTier.value || it.selected !== 1) return null
+  const gap = Number(nextTier.value.threshold) - selectedSum.value
+  if (gap <= 0) return null
+  const unit = Number(it.price)
+  if (unit <= 0) return null
+  const addQty = Math.ceil(gap / unit)
+  // Only nudge when the add is small (1-3 units) so it's actually "更划算".
+  if (addQty < 1 || addQty > 3) return null
+  const targetQty = Number(it.quantity || 1) + addQty
+  if (targetQty > Number(it.stock || 99)) return null
+  return { addQty, targetQty, nextTier: nextTier.value }
+}
+
+// "凑单" quick-add: bump this line's quantity by the suggested amount to
+// reach the next discount tier.
+async function quickAddTier(it) {
+  const hint = itemTierHint(it)
+  if (!hint) return
+  await changeQty(it, hint.targetQty)
+  showSuccessToast(`已凑单至满¥${hint.nextTier.threshold}减¥${hint.nextTier.discount}`)
+}
+
+async function loadTiers() {
+  try {
+    const data = await getTieredDiscounts()
+    tiers.value = Array.isArray(data) ? data : []
+    tiersLoaded.value = true
+  } catch {
+    // Best-effort: without tiers we just show the basic stepper.
+    tiersLoaded.value = false
+  }
+}
 </script>
 
 <template>
@@ -259,6 +338,17 @@ function isPriceDrop(it) {
               <van-stepper v-model="it.quantity" :min="1" :max="it.stock" @change="(v) => changeQty(it, v)" />
               <van-icon name="delete-o" size="20" @click="removeItem(it)" />
             </div>
+            <!-- Smart Quantity Selector (智能数量选择): tier-aware hints -->
+            <div v-if="tiersLoaded" class="qty-hints">
+              <span
+                v-if="itemTierHint(it)"
+                class="qty-tip"
+                @click="quickAddTier(it)"
+              >
+                买{{ itemTierHint(it).targetQty }}件更划算，凑单满¥{{ itemTierHint(it).nextTier.threshold }}减¥{{ itemTierHint(it).nextTier.discount }}
+                <span class="qty-add-btn">凑单 +{{ itemTierHint(it).addQty }}</span>
+              </span>
+            </div>
           </div>
         </div>
         <template #right>
@@ -266,6 +356,17 @@ function isPriceDrop(it) {
           <div class="swipe-right-del" @click="removeItem(it)">删除</div>
         </template>
       </van-swipe-cell>
+
+      <!-- Smart Quantity Selector (智能数量选择): tier status banner -->
+      <div v-if="tiersLoaded" class="tier-banner">
+        <span v-if="hasMetTier" class="tier-met">
+          <span class="tier-check">✓</span> 已达满减：满¥{{ metTier.threshold }}减¥{{ metTier.discount }}
+          <span v-if="nextTier" class="tier-next">距满¥{{ nextTier.threshold }}减¥{{ nextTier.discount }}还差¥{{ (nextTier.threshold - selectedSum).toFixed(2) }}</span>
+        </span>
+        <span v-else-if="nextTier" class="tier-progress">
+          再买¥{{ (nextTier.threshold - selectedSum).toFixed(2) }}可享满¥{{ nextTier.threshold }}减¥{{ nextTier.discount }}
+        </span>
+      </div>
 
       <div class="invite-row">
         <van-button class="invite-btn" round size="small" icon="friends-o" @click="openInvite">
@@ -349,6 +450,75 @@ function isPriceDrop(it) {
 .ci-name .drop-tag { vertical-align: middle; margin-right: 4px; }
 .ci-bottom { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .ci-bottom .price { font-size: 16px; flex: 1; }
+/* Smart Quantity Selector (智能数量选择) */
+.qty-hints { margin-top: 6px; }
+.qty-tip {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 12px;
+  color: #ff7a18;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  line-height: 1.5;
+}
+.qty-add-btn {
+  display: inline-flex;
+  align-items: center;
+  background: #ff7a18;
+  color: #fff;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.qty-add-btn:active { opacity: 0.85; }
+.tier-banner {
+  margin: 8px 12px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.tier-banner .tier-met {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: #07c160;
+  background: #f0fff4;
+  border: 1px solid #b7eb8f;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.tier-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: #07c160;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: bold;
+}
+.tier-next {
+  color: #ff7a18;
+  font-size: 11px;
+}
+.tier-progress {
+  display: block;
+  color: #ff7a18;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
 /* 猜你喜欢 recommended products section */
 .rec-section { background: #fff; margin-bottom: 8px; padding: 12px 12px 8px; }
 .rec-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }

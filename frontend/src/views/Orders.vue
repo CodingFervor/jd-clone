@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showLoadingToast, showDialog } from 'vant'
 import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder, addToCart } from '../api'
@@ -14,6 +14,42 @@ const expandedOrders = ref(new Set())
 // are already reached. 'cancelled' is ranked below 'pending' so only the
 // creation stage lights up for it.
 const STATUS_RANK = { pending: 0, paid: 1, shipped: 2, completed: 3, cancelled: -1 }
+
+// ---- Status filter tabs (订单按状态分组) ----
+// Tabs: 全部 | 待付款 | 待发货 | 待收货 | 已完成. Each tab maps to one or more
+// underlying order statuses. `activeStatus` drives the real-time filter.
+const STATUS_TABS = [
+  { key: 'all', label: '全部', statuses: null },
+  { key: 'pending', label: '待付款', statuses: ['pending'] },
+  { key: 'paid', label: '待发货', statuses: ['paid'] },
+  { key: 'shipped', label: '待收货', statuses: ['shipped'] },
+  { key: 'completed', label: '已完成', statuses: ['completed'] },
+]
+const activeStatus = ref('all')
+// Count per tab, computed live from the orders list. 'all' excludes cancelled
+// orders so the "全部" tab reflects actionable orders (mirrors typical JD UX).
+const statusCounts = computed(() => {
+  const counts = {}
+  for (const t of STATUS_TABS) {
+    if (t.statuses === null) {
+      counts[t.key] = orders.value.filter((o) => o.status !== 'cancelled').length
+    } else {
+      counts[t.key] = orders.value.filter((o) => t.statuses.includes(o.status)).length
+    }
+  }
+  return counts
+})
+// Orders filtered by the active tab, in real time.
+const filteredOrders = computed(() => {
+  const tab = STATUS_TABS.find((t) => t.key === activeStatus.value)
+  if (!tab || tab.statuses === null) {
+    return orders.value.filter((o) => o.status !== 'cancelled')
+  }
+  return orders.value.filter((o) => tab.statuses.includes(o.status))
+})
+function setStatus(key) {
+  activeStatus.value = key
+}
 
 // Order timeout countdown: pending orders expire 30 minutes after creation.
 const TIMEOUT_MS = 30 * 60 * 1000
@@ -277,8 +313,26 @@ function orderStages(o) {
     </van-nav-bar>
     <div v-if="loading" class="loading"><van-loading /></div>
     <van-empty v-else-if="!orders.length" description="暂无订单" />
-    <div v-else class="order-list">
-      <div v-for="o in orders" :key="o.id" class="order-card">
+    <div v-else>
+      <!-- Status filter tabs (订单按状态分组) -->
+      <div class="status-tabs">
+        <span
+          v-for="t in STATUS_TABS"
+          :key="t.key"
+          class="status-tab"
+          :class="{ active: activeStatus === t.key }"
+          @click="setStatus(t.key)"
+        >
+          {{ t.label }}
+          <span v-if="statusCounts[t.key]" class="status-count">{{ statusCounts[t.key] }}</span>
+        </span>
+      </div>
+
+      <div v-if="!filteredOrders.length" class="filter-empty">
+        <van-empty :description="`暂无${STATUS_TABS.find((t) => t.key === activeStatus).label}订单`" />
+      </div>
+      <transition-group v-else name="order-fade" tag="div" class="order-list">
+        <div v-for="o in filteredOrders" :key="o.id" class="order-card">
         <div class="o-head">
           <span class="o-no">订单号: {{ o.order_no }}</span>
           <span class="o-status">
@@ -333,6 +387,7 @@ function orderStages(o) {
           </div>
         </div>
       </div>
+      </transition-group>
     </div>
   </div>
 </template>
@@ -341,6 +396,78 @@ function orderStages(o) {
 .orders-page { min-height: 100vh; }
 .loading { text-align: center; padding: 80px; }
 .export-btn { font-size: 14px; color: #e1251b; font-weight: 500; }
+/* Status filter tabs (订单按状态分组) */
+.status-tabs {
+  display: flex;
+  background: #fff;
+  margin: 8px;
+  border-radius: 8px;
+  padding: 4px 4px 0;
+  position: sticky;
+  top: 46px;
+  z-index: 10;
+}
+.status-tab {
+  flex: 1;
+  text-align: center;
+  padding: 12px 2px;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.25s ease;
+  white-space: nowrap;
+}
+.status-tab.active {
+  color: #e1251b;
+  font-weight: 600;
+}
+.status-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  background: #e1251b;
+}
+.status-count {
+  display: inline-block;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 4px;
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #999;
+  background: #f0f0f0;
+  border-radius: 8px;
+  vertical-align: 1px;
+}
+.status-tab.active .status-count {
+  color: #fff;
+  background: #e1251b;
+}
+.filter-empty { background: #fff; margin: 0 8px 8px; border-radius: 8px; }
+/* Smooth transition when switching status tabs */
+.order-fade-enter-active,
+.order-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.order-fade-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.order-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+.order-fade-move {
+  transition: transform 0.25s ease;
+}
 .order-card { background: #fff; margin: 8px; border-radius: 8px; padding: 12px; }
 .o-head { display: flex; justify-content: space-between; font-size: 12px; color: #999; margin-bottom: 8px; }
 .o-status { color: #e1251b; }
