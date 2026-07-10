@@ -1,8 +1,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showSuccessToast } from 'vant'
-import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder } from '../api'
+import { showToast, showSuccessToast, showLoadingToast, showDialog } from 'vant'
+import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder, addToCart } from '../api'
 
 const router = useRouter()
 const orders = ref([])
@@ -79,6 +79,38 @@ async function cancel(o) {
   } catch (e) {
     showToast(e.response?.data?.error || '操作失败')
   }
+}
+// One-click repurchase: re-add every item from a completed order to the cart
+// and route the user to /cart. Missing products (deleted/discontinued) are
+// skipped and reported so the repurchase is best-effort, not all-or-nothing.
+async function repurchase(o) {
+  if (!localStorage.getItem('jd_token')) {
+    showDialog({ title: '提示', message: '请先登录' }).then(() => router.push('/login'))
+    return
+  }
+  const items = parseItems(o.items_json)
+  const targets = items.filter((it) => it.product_id)
+  if (!targets.length) {
+    showToast('无可回购商品')
+    return
+  }
+  showLoadingToast({ message: '正在加入购物车...', forbidClick: true, duration: 0 })
+  let ok = 0
+  let fail = 0
+  await Promise.all(
+    targets.map((it) =>
+      addToCart(it.product_id, it.quantity).then(() => { ok++ }).catch(() => { fail++ })
+    )
+  )
+  if (ok && !fail) {
+    showSuccessToast('已加入购物车')
+  } else if (ok && fail) {
+    showSuccessToast(`已加入 ${ok} 件，${fail} 件商品已失效`)
+  } else {
+    showToast('商品已失效，无法购买')
+    return
+  }
+  router.push('/cart')
 }
 function viewLogistics(o) {
   router.push({ name: 'logistics', query: { order_id: o.id } })
@@ -189,6 +221,7 @@ function groupPackages(items) {
           <div class="o-actions">
             <van-button v-if="o.status === 'pending'" size="small" type="danger" round @click="pay(o)">去支付</van-button>
             <van-button v-if="o.status === 'pending'" size="small" plain round @click="cancel(o)">取消订单</van-button>
+            <van-button v-if="o.status === 'completed'" size="small" type="danger" round @click="repurchase(o)">再次购买</van-button>
             <van-button v-if="['shipped','completed'].includes(o.status)" size="small" type="danger" round @click="confirm(o)">确认收货</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请售后</van-button>

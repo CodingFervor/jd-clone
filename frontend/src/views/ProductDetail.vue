@@ -72,6 +72,34 @@ const reviewDistBars = computed(() => {
     pct: Math.round((dist[star - 1] / max) * 100),
   }))
 })
+// Spec matrix table (商品规格矩阵表): transforms the SKU list into a table
+// with one column per spec dimension plus price/stock. Only shown when SKUs
+// expose at least 2 parseable dimensions; otherwise the tag selector alone is
+// enough. Each SKU.spec is a JSON string like {"颜色":"黑色","版本":"256GB"}.
+const specMatrix = computed(() => {
+  const parsed = skus.value.map((s) => {
+    let dims = {}
+    try {
+      const obj = JSON.parse(s.spec || '{}')
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) dims = obj
+    } catch {
+      dims = {}
+    }
+    return { sku: s, dims }
+  })
+  // Collect dimension names in first-seen order.
+  const dimNames = []
+  const seen = new Set()
+  for (const p of parsed) {
+    for (const k of Object.keys(p.dims)) {
+      if (!seen.has(k)) {
+        seen.add(k)
+        dimNames.push(k)
+      }
+    }
+  }
+  return { dimNames, rows: parsed }
+})
 async function onUploadReviewImage(item) {
   try {
     const res = await uploadImage(item.file)
@@ -325,6 +353,28 @@ function priceTrend() {
           @click="selectSKU(s)"
         >{{ s.spec_text }} <small>¥{{ fmt(s.price) }}</small></span>
       </div>
+      <!-- Spec matrix table: shown only when SKUs span 2+ spec dimensions -->
+      <table v-if="specMatrix.dimNames.length >= 2" class="spec-matrix">
+        <thead>
+          <tr>
+            <th v-for="dim in specMatrix.dimNames" :key="dim">{{ dim }}</th>
+            <th>价格</th>
+            <th>库存</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="row in specMatrix.rows"
+            :key="row.sku.id"
+            :class="{ 'row-active': selectedSKU && selectedSKU.id === row.sku.id }"
+            @click="selectSKU(row.sku)"
+          >
+            <td v-for="dim in specMatrix.dimNames" :key="dim">{{ row.dims[dim] || '-' }}</td>
+            <td class="sm-price">¥{{ fmt(row.sku.price) }}</td>
+            <td :class="{ 'sm-out': row.sku.stock <= 0 }">{{ row.sku.stock > 0 ? row.sku.stock + '件' : '缺货' }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
     <div class="title-block">
       <h2 class="p-title">{{ product.name }}</h2>
@@ -527,6 +577,16 @@ function priceTrend() {
 .sku-tag { padding: 6px 12px; background: #f7f7f7; border: 1px solid #eee; border-radius: 16px; font-size: 13px; color: #333; }
 .sku-tag.active { background: #fff5f5; border-color: #e1251b; color: #e1251b; }
 .sku-tag small { color: #e1251b; margin-left: 4px; }
+/* Spec matrix table (商品规格矩阵表) */
+.spec-matrix { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+.spec-matrix th, .spec-matrix td { border: 1px solid #eee; padding: 8px 6px; text-align: center; white-space: nowrap; }
+.spec-matrix th { background: #fafafa; color: #666; font-weight: 500; }
+.spec-matrix tbody tr { cursor: pointer; }
+.spec-matrix tbody tr:active { background: #fafafa; }
+.spec-matrix .row-active { background: #fff5f5; }
+.spec-matrix .row-active td { color: #e1251b; font-weight: 600; }
+.spec-matrix .sm-price { color: #e1251b; }
+.spec-matrix .sm-out { color: #999; }
 .title-block { padding: 0 16px 12px; background: #fff; }
 .p-title { font-size: 17px; line-height: 24px; }
 .p-sub { color: #999; font-size: 13px; margin-top: 4px; }
