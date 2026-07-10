@@ -4,6 +4,68 @@ import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { getCart, updateCart, deleteCart, createOrder, getProducts, addToCart } from '../api'
 
+// ---- Group buy invite (好友拼单邀请) ----
+// A festive popup that generates shareable invite text for the current cart,
+// lets the user copy it or use the Web Share API, and tracks a demo invite
+// count in localStorage.
+const showInvite = ref(false)
+// Persisted demo counter of "已邀请 N 人" (number of invites accepted).
+const invitedCount = ref(Number(localStorage.getItem('jd_group_invite_count') || 0))
+
+// Invite text reflects the current cart contents (item count + total price).
+const inviteText = computed(() => {
+  const count = items.value.reduce((s, i) => s + (i.quantity || 1), 0)
+  const total = Number(selectedTotal.value || 0).toFixed(2)
+  return `我在京东挑了${count}件好物，总价¥${total}，快来一起拼单享优惠！链接：${window.location.origin}`
+})
+
+function openInvite() {
+  showInvite.value = true
+}
+
+async function copyInvite() {
+  try {
+    await navigator.clipboard.writeText(inviteText.value)
+    showSuccessToast('已复制邀请文案')
+  } catch (e) {
+    // Fallback for non-secure contexts / older browsers.
+    const ta = document.createElement('textarea')
+    ta.value = inviteText.value
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try {
+      document.execCommand('copy')
+      showSuccessToast('已复制邀请文案')
+    } catch (_) {
+      showToast('复制失败，请手动复制')
+    }
+    document.body.removeChild(ta)
+  }
+}
+
+async function shareInvite() {
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: '好友拼单邀请', text: inviteText.value, url: window.location.origin })
+      bumpInvite()
+    } catch (e) {
+      // User cancelled the share sheet — do nothing.
+    }
+  } else {
+    // No Web Share API: fall back to copying the invite text.
+    await copyInvite()
+    bumpInvite()
+  }
+}
+
+// Increment the demo invite counter when an invite is actually sent.
+function bumpInvite() {
+  invitedCount.value += 1
+  localStorage.setItem('jd_group_invite_count', String(invitedCount.value))
+}
+
 const router = useRouter()
 const items = ref([])
 const selectedTotal = ref(0)
@@ -173,12 +235,39 @@ function isPriceDrop(it) {
           </div>
         </div>
 
+      <div class="invite-row">
+        <van-button class="invite-btn" round size="small" icon="friends-o" @click="openInvite">
+          👥 邀请拼单
+        </van-button>
+      </div>
+
       <van-submit-bar :price="selectedTotal * 100" button-text="结算" @submit="checkout">
         <van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox>
         <span class="invert-btn" @click="invertSelection">反选</span>
         <span class="selected-count">已选{{ selectedCount }}件</span>
       </van-submit-bar>
     </div>
+
+    <!-- Group buy invite popup (好友拼单邀请) -->
+    <van-popup v-model:show="showInvite" round closeable position="bottom" :style="{ height: '52%' }">
+      <div class="invite-popup">
+        <div class="invite-header">
+          <div class="invite-title">邀请好友一起拼单</div>
+          <div class="invite-sub">拼着买，更优惠</div>
+        </div>
+        <div class="invite-body">
+          <div class="invite-counter">
+            <span class="ic-icon">🎉</span>
+            <span class="ic-text">已邀请 <b>{{ invitedCount }}</b> 人</span>
+          </div>
+          <div class="invite-text">{{ inviteText }}</div>
+          <div class="invite-actions">
+            <van-button class="ia-btn" round block type="danger" icon="records" @click="copyInvite">复制邀请</van-button>
+            <van-button class="ia-btn" round block plain type="danger" icon="share-o" @click="shareInvite">系统分享</van-button>
+          </div>
+        </div>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -203,4 +292,54 @@ function isPriceDrop(it) {
 /* 反选 button + 已选N件 count inside the submit bar */
 .invert-btn { margin-left: 10px; padding: 3px 10px; font-size: 12px; color: #e1251b; border: 1px solid #e1251b; border-radius: 12px; cursor: pointer; white-space: nowrap; }
 .selected-count { margin-left: 10px; font-size: 12px; color: #999; white-space: nowrap; }
+
+/* Group buy invite (好友拼单邀请) */
+.invite-row {
+  display: flex;
+  justify-content: center;
+  padding: 8px 12px 4px;
+}
+.invite-btn {
+  background: linear-gradient(90deg, #e1251b 0%, #ff7a18 100%);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(225, 37, 27, 0.3);
+}
+.invite-popup { display: flex; flex-direction: column; height: 100%; }
+.invite-header {
+  background: linear-gradient(135deg, #e1251b 0%, #ff4d4f 50%, #ff7a45 100%);
+  color: #fff;
+  padding: 24px 20px 18px;
+  border-radius: 16px 16px 0 0;
+  text-align: center;
+}
+.invite-title { font-size: 20px; font-weight: bold; letter-spacing: 1px; }
+.invite-sub { font-size: 13px; opacity: 0.92; margin-top: 4px; }
+.invite-body { flex: 1; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 16px; }
+.invite-counter {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff5f5;
+  border: 1px solid #ffd6d6;
+  color: #e1251b;
+  font-size: 14px;
+  padding: 6px 16px;
+  border-radius: 20px;
+}
+.invite-counter .ic-icon { font-size: 16px; }
+.invite-counter b { font-size: 16px; margin: 0 2px; }
+.invite-text {
+  background: #f7f8fa;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 14px;
+  line-height: 22px;
+  color: #333;
+  word-break: break-all;
+}
+.invite-actions { display: flex; flex-direction: column; gap: 10px; }
+.ia-btn { font-weight: 600; }
 </style>

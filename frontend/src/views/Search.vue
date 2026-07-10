@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
 import { ftsSearch, ftsSuggest } from '../api'
 
 const router = useRouter()
+const route = useRoute()
 const keyword = ref('')
 const results = ref([])
 const history = ref(JSON.parse(localStorage.getItem('jd_search_history') || '[]'))
@@ -83,7 +84,14 @@ function backToDiscover() {
   results.value = []
 }
 
-onMounted(() => {})
+onMounted(() => {
+  // Support deep-links with ?q=<keyword> (e.g. from the 热门标签 feed on
+  // the home page): pre-fill and run the search immediately.
+  const q = route.query.q
+  if (q && String(q).trim()) {
+    doSearch(String(q).trim())
+  }
+})
 onUnmounted(() => {
   if (suggestTimer) clearTimeout(suggestTimer)
 })

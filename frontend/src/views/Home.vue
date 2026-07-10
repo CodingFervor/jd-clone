@@ -102,6 +102,26 @@ function isSeckill(p) {
 // Split countdown into 3 monospace blocks for styling.
 const timeBlocks = computed(() => countdown.value.split(':'))
 
+// ---- Popular tags feed (热门标签信息流) ----
+// Hardcoded popular discovery tags. Clicking a tag navigates to the search
+// page pre-filled with the tag text, reusing the existing search flow.
+const hotTags = [
+  '新品上市',
+  '限时特惠',
+  '品质好物',
+  '夏日必备',
+  '居家优选',
+  '数码达人',
+  '美妆护肤',
+  '食品生鲜',
+]
+// Rotate through 5 festive pill colors for visual variety.
+const tagColorClass = (i) => `tag-c${(i % 5) + 1}`
+
+function goTag(tag) {
+  router.push({ path: '/search', query: { q: tag } })
+}
+
 onUnmounted(() => {
   if (flashTimer) {
     clearInterval(flashTimer)
@@ -167,6 +187,23 @@ onUnmounted(() => {
           <div class="price">¥{{ fmt(p.price) }}</div>
           <div class="origin">¥{{ fmt(p.original_price) }}</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Popular tags feed (热门标签) -->
+    <div class="tag-section">
+      <div class="tag-section-head">
+        <span class="tsh-title"><van-icon name="hot-o" /> 热门标签</span>
+        <span class="tsh-sub">点击发现好物</span>
+      </div>
+      <div class="tag-scroll">
+        <span
+          v-for="(t, i) in hotTags"
+          :key="t"
+          class="tag-chip"
+          :class="tagColorClass(i)"
+          @click="goTag(t)"
+        >{{ t }}</span>
       </div>
     </div>
 
@@ -270,6 +307,54 @@ onUnmounted(() => {
   color: #999;
   text-decoration: line-through;
 }
+
+/* Popular tags feed (热门标签) */
+.tag-section {
+  margin: 0 8px 8px;
+  border-radius: 10px;
+  padding: 14px 12px;
+  background: linear-gradient(135deg, #fff5f5 0%, #fff0f6 40%, #fff7e6 70%, #f0f5ff 100%);
+  box-shadow: 0 2px 8px rgba(225, 37, 27, 0.06);
+}
+.tag-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.tsh-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #e1251b;
+}
+.tsh-sub {
+  font-size: 12px;
+  color: #999;
+}
+.tag-scroll {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.tag-chip {
+  display: inline-block;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.tag-chip:active {
+  transform: scale(0.95);
+}
+.tag-c1 { background: linear-gradient(135deg, #e1251b, #ff4d4f); box-shadow: 0 2px 6px rgba(225, 37, 27, 0.3); }
+.tag-c2 { background: linear-gradient(135deg, #ff7a18, #ffb84d); box-shadow: 0 2px 6px rgba(255, 122, 24, 0.3); }
+.tag-c3 { background: linear-gradient(135deg, #fa2c6e, #ff6fae); box-shadow: 0 2px 6px rgba(250, 44, 110, 0.3); }
+.tag-c4 { background: linear-gradient(135deg, #13c2c2, #36cfc9); box-shadow: 0 2px 6px rgba(19, 194, 194, 0.3); }
+.tag-c5 { background: linear-gradient(135deg, #722ed1, #9254de); box-shadow: 0 2px 6px rgba(114, 46, 209, 0.3); }
 .product-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
