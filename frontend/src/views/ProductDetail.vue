@@ -759,6 +759,49 @@ function setupVideoObserver() {
   videoObserver.observe(v)
 }
 
+// ---- Feature: 商品AR试穿占位 (Product AR Try-On Placeholder) ----
+// A simulated AR try-on experience for clothing/beauty categories. The button
+// only shows when the product's tags contain clothing/beauty keywords; clicking
+// it opens a full-screen camera-like overlay that fakes an AR session:
+//   1) "正在初始化AR..." loading for 1.5s
+//   2) Then the product image is overlaid with "试穿效果" text
+//   3) A capture button (📸) shows a "已截图保存" toast
+//   4) A 关闭 button exits the overlay
+// The keyword set covers clothing (衣/裤/裙/鞋/帽) and beauty (妆/护肤).
+const AR_KEYWORDS = ['衣', '裤', '裙', '鞋', '帽', '妆', '护肤']
+const showAR = ref(false)
+const arLoading = ref(false)
+let arTimer = null
+// Whether the current product is AR-eligible (its tags contain any keyword).
+const arEligible = computed(() => {
+  if (!product.value) return false
+  const tags = String(product.value.tags || '')
+  if (!tags) return false
+  return AR_KEYWORDS.some((k) => tags.includes(k))
+})
+// Open the AR overlay: show loading for 1.5s, then reveal the try-on view.
+function openAR() {
+  showAR.value = true
+  arLoading.value = true
+  if (arTimer) clearTimeout(arTimer)
+  arTimer = setTimeout(() => {
+    arLoading.value = false
+  }, 1500)
+}
+// Close the AR overlay and cancel any pending loading timer.
+function closeAR() {
+  showAR.value = false
+  arLoading.value = false
+  if (arTimer) {
+    clearTimeout(arTimer)
+    arTimer = null
+  }
+}
+// Simulate capturing a screenshot of the AR view.
+function captureAR() {
+  showSuccessToast('已截图保存')
+}
+
 onUnmounted(() => {
   if (sectionObserver) {
     sectionObserver.disconnect()
@@ -772,6 +815,11 @@ onUnmounted(() => {
   if (rotateTimer) {
     clearInterval(rotateTimer)
     rotateTimer = null
+  }
+  // Feature: AR试穿 — clear the AR loading timer on unmount.
+  if (arTimer) {
+    clearTimeout(arTimer)
+    arTimer = null
   }
 })
 </script>
@@ -835,6 +883,8 @@ onUnmounted(() => {
       <van-image v-else width="100%" height="375" :src="product.image" fit="cover" />
       <!-- 360° toggle button (hidden while rotating) -->
       <button v-if="!rotateMode" class="rotate-360-btn" @click="startRotateMode">🔄 360°</button>
+      <!-- Feature: AR试穿 — floating AR try-on button, only for clothing/beauty categories -->
+      <button v-if="!rotateMode && arEligible" class="ar-tryon-btn" @click="openAR">📷 AR试穿</button>
     </div>
     <div class="price-block">
       <span class="big-price">¥{{ fmt(currentPrice()) }}</span>
@@ -1242,6 +1292,37 @@ onUnmounted(() => {
         <van-button type="danger" block @click="submitReview">提交评价</van-button>
       </div>
     </van-popup>
+
+    <!-- Feature: AR试穿 — full-screen camera-like AR try-on overlay -->
+    <div v-if="showAR" class="ar-overlay">
+      <!-- Camera viewfinder frame -->
+      <div class="ar-viewfinder">
+        <span class="ar-vf-corner ar-vf-tl"></span>
+        <span class="ar-vf-corner ar-vf-tr"></span>
+        <span class="ar-vf-corner ar-vf-bl"></span>
+        <span class="ar-vf-corner ar-vf-br"></span>
+      </div>
+      <!-- Loading state: 正在初始化AR... -->
+      <div v-if="arLoading" class="ar-loading">
+        <van-loading color="#fff" size="36px" />
+        <p class="ar-loading-text">正在初始化AR...</p>
+      </div>
+      <!-- Try-on result: product image overlaid with 试穿效果 text -->
+      <div v-else class="ar-scene">
+        <van-image class="ar-product-img" :src="product.image" fit="contain" />
+        <div class="ar-effect-label">试穿效果</div>
+      </div>
+      <!-- Top bar: close button -->
+      <div class="ar-topbar">
+        <span class="ar-hint">📷 AR试穿 · 演示模式</span>
+        <button class="ar-close-btn" @click="closeAR">关闭</button>
+      </div>
+      <!-- Bottom capture button -->
+      <div v-if="!arLoading" class="ar-bottom">
+        <button class="ar-capture-btn" @click="captureAR">📸</button>
+        <p class="ar-capture-hint">点击截图保存</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1657,4 +1738,164 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .rotate-stop:active { background: #e1251b; color: #fff; }
+
+/* Feature: 商品AR试穿占位 (Product AR Try-On Placeholder) */
+.ar-tryon-btn {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 5;
+  background: rgba(225, 37, 27, 0.85);
+  color: #fff;
+  border: none;
+  border-radius: 18px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(225, 37, 27, 0.35);
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+.ar-tryon-btn:active { background: rgba(225, 37, 27, 1); transform: scale(0.96); }
+/* Full-screen camera-like overlay */
+.ar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+/* Camera viewfinder corners frame */
+.ar-viewfinder {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 78vw;
+  max-width: 320px;
+  height: 60vh;
+  max-height: 460px;
+  pointer-events: none;
+}
+.ar-vf-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.75);
+}
+.ar-vf-tl { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 6px 0 0 0; }
+.ar-vf-tr { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 6px 0 0; }
+.ar-vf-bl { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 6px; }
+.ar-vf-br { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 6px 0; }
+/* Loading state */
+.ar-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  z-index: 2;
+}
+.ar-loading-text {
+  color: #fff;
+  font-size: 15px;
+  margin: 0;
+  letter-spacing: 1px;
+}
+/* Try-on result scene */
+.ar-scene {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.ar-product-img {
+  width: 60vw;
+  max-width: 260px;
+  height: auto;
+  max-height: 320px;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(225, 37, 27, 0.4);
+  animation: ar-fade-in 0.5s ease;
+}
+@keyframes ar-fade-in {
+  from { opacity: 0; transform: scale(0.85) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.ar-effect-label {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  background: rgba(225, 37, 27, 0.85);
+  padding: 4px 16px;
+  border-radius: 16px;
+}
+/* Top bar with close button */
+.ar-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  z-index: 3;
+}
+.ar-hint {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+}
+.ar-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 14px;
+  padding: 4px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.ar-close-btn:active { background: rgba(225, 37, 27, 0.85); border-color: #e1251b; }
+/* Bottom capture button */
+.ar-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px;
+  padding-bottom: max(28px, env(safe-area-inset-bottom));
+  z-index: 3;
+}
+.ar-capture-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 3px rgba(225, 37, 27, 0.6);
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+.ar-capture-btn:active { transform: scale(0.9); }
+.ar-capture-hint {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  margin: 0;
+}
 </style>

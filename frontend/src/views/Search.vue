@@ -8,10 +8,68 @@ const router = useRouter()
 const route = useRoute()
 const keyword = ref('')
 const results = ref([])
-const history = ref(JSON.parse(localStorage.getItem('jd_search_history') || '[]'))
+// History is stored as a list of { text, count, last } objects so the tag
+// cloud can scale font size by search count and color by recency. Old
+// string-only entries (from prior versions) are migrated on load.
+function loadHistory() {
+  let raw = []
+  try {
+    raw = JSON.parse(localStorage.getItem('jd_search_history') || '[]')
+  } catch {
+    raw = []
+  }
+  // Migrate legacy string entries into objects.
+  return raw.map((item) => {
+    if (typeof item === 'string') return { text: item, count: 1, last: 0 }
+    return item
+  })
+}
+const history = ref(loadHistory())
 const searched = ref(false)
 const suggestions = ref([])
 const focused = ref(false)
+
+// ---- Feature: 搜索历史云图 (Smart Search History Cloud) ----
+// Build the tag-cloud model from the history list. Each tag gets:
+//   - fontSize scaled by its search count relative to the max count
+//   - color: red for the most recent searches, gray for older ones
+//   - overflow: only the top 15 tags render at normal size; the rest show in a
+//     smaller font below so the cloud stays readable.
+const MAX_TAGS = 15
+const cloudTags = computed(() => {
+  const list = history.value.slice()
+  if (!list.length) return { primary: [], overflow: [] }
+  const nowTs = Date.now()
+  const maxCount = Math.max(1, ...list.map((h) => h.count || 1))
+  // Sort by recency (most recent first) for stable ordering of the primary set.
+  const sorted = list.slice().sort((a, b) => (b.last || 0) - (a.last || 0))
+  return {
+    primary: sorted.slice(0, MAX_TAGS).map((h, idx) => {
+      const cnt = h.count || 1
+      // Font size ranges from 13px (count=1) to 24px (count=max), scaled
+      // linearly so frequent terms stand out.
+      const size = 13 + Math.round((cnt / maxCount) * 11)
+      // Recency window: searched within the last 3 days is "recent" (red).
+      const ageMs = nowTs - (h.last || 0)
+      const recent = h.last > 0 && ageMs < 3 * 24 * 60 * 60 * 1000
+      return {
+        text: h.text,
+        count: cnt,
+        size,
+        // Top 5 most-recent are always red; otherwise based on the 3-day window.
+        color: idx < 5 || recent ? '#e1251b' : '#999',
+        weight: idx < 3 ? 'bold' : 'normal',
+      }
+    }),
+    overflow: sorted.slice(MAX_TAGS).map((h) => ({
+      text: h.text,
+      count: h.count || 1,
+      size: 11,
+      color: '#bbb',
+      weight: 'normal',
+    })),
+  }
+})
 
 // ---- Voice search (语音搜索) ----
 // Uses the Web Speech API when available. While listening the mic icon pulses.
@@ -122,10 +180,18 @@ async function doSearch(kw) {
   suggestions.value = []
   focused.value = false
   if (suggestTimer) clearTimeout(suggestTimer)
-  // Persist to localStorage history (last 10, newest first, dedup).
-  const h = history.value.filter((x) => x !== kw)
-  h.unshift(kw)
-  history.value = h.slice(0, 10)
+  // Persist to localStorage history as { text, count, last } objects so the
+  // tag cloud can scale font size by count and color by recency. Dedup by
+  // text, increment the count, and bump the last-searched timestamp. Keep the
+  // most recent 40 entries so the 15-tag cap + overflow have data to draw from.
+  const h = history.value.slice()
+  const idx = h.findIndex((x) => x.text === kw)
+  if (idx >= 0) {
+    h[idx] = { text: kw, count: (h[idx].count || 1) + 1, last: Date.now() }
+  } else {
+    h.unshift({ text: kw, count: 1, last: Date.now() })
+  }
+  history.value = h.slice(0, 40)
   localStorage.setItem('jd_search_history', JSON.stringify(history.value))
   try {
     const res = await ftsSearch(kw)
@@ -200,10 +266,24 @@ function fmt(n) {
       <div v-if="history.length" class="history">
         <div class="h-head">
           <span>搜索历史</span>
-          <van-button size="mini" plain hairline @click="clearHistory">清空历史</van-button>
+          <van-button size="mini" plain hairline @click="clearHistory">清空</van-button>
         </div>
-        <div class="h-tags">
-          <van-tag v-for="h in history" :key="h" plain round size="medium" @mousedown.prevent="doSearch(h)">{{ h }}</van-tag>
+        <!-- Feature: 搜索历史云图 — varying-sized tag cloud, color by recency -->
+        <div class="cloud">
+          <span
+            v-for="t in cloudTags.primary"
+            :key="t.text"
+            class="cloud-tag"
+            :style="{ fontSize: t.size + 'px', color: t.color, fontWeight: t.weight }"
+            @mousedown.prevent="doSearch(t.text)"
+          >{{ t.text }}</span>
+          <span
+            v-for="t in cloudTags.overflow"
+            :key="'o-' + t.text"
+            class="cloud-tag cloud-overflow"
+            :style="{ fontSize: t.size + 'px', color: t.color, fontWeight: t.weight }"
+            @mousedown.prevent="doSearch(t.text)"
+          >{{ t.text }}</span>
         </div>
       </div>
       <div class="hot">
@@ -240,10 +320,24 @@ function fmt(n) {
       <div v-if="history.length" class="history">
         <div class="h-head">
           <span>搜索历史</span>
-          <van-button size="mini" plain hairline @click="clearHistory">清空历史</van-button>
+          <van-button size="mini" plain hairline @click="clearHistory">清空</van-button>
         </div>
-        <div class="h-tags">
-          <van-tag v-for="h in history" :key="h" plain round size="medium" @click="doSearch(h)">{{ h }}</van-tag>
+        <!-- Feature: 搜索历史云图 — varying-sized tag cloud, color by recency -->
+        <div class="cloud">
+          <span
+            v-for="t in cloudTags.primary"
+            :key="t.text"
+            class="cloud-tag"
+            :style="{ fontSize: t.size + 'px', color: t.color, fontWeight: t.weight }"
+            @click="doSearch(t.text)"
+          >{{ t.text }}</span>
+          <span
+            v-for="t in cloudTags.overflow"
+            :key="'o-' + t.text"
+            class="cloud-tag cloud-overflow"
+            :style="{ fontSize: t.size + 'px', color: t.color, fontWeight: t.weight }"
+            @click="doSearch(t.text)"
+          >{{ t.text }}</span>
         </div>
       </div>
       <div class="hot">
@@ -301,6 +395,27 @@ function fmt(n) {
   align-items: center;
 }
 .h-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Feature: 搜索历史云图 (Smart Search History Cloud) */
+.cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  line-height: 1.8;
+}
+.cloud-tag {
+  cursor: pointer;
+  display: inline-block;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s ease, transform 0.15s ease;
+  user-select: none;
+}
+.cloud-tag:active {
+  background: #fff5f5;
+  transform: scale(1.06);
+}
+.cloud-overflow { opacity: 0.75; }
 .results-bar {
   display: flex;
   justify-content: space-between;
