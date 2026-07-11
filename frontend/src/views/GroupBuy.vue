@@ -25,6 +25,53 @@ function fmtRemain(ms) {
   const s = Math.floor((ms % 60000) / 1000)
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
+// ---- Feature: 拼团倒计时圆环 (Group Buy Countdown Ring) ----
+// SVG circle countdown. The total duration is derived from the deal's
+// start_time → end_time window so the ring depletes proportionally. The ring's
+// stroke-dashoffset grows as time runs out; the color shifts green→orange→red
+// →gray based on remaining percentage, with HH:MM text in the center.
+// Ring geometry constants.
+const RING_R = 26          // circle radius
+const RING_C = 2 * Math.PI * RING_R // circumference
+// Total window for a deal. Falls back to a 24h span if start_time is missing
+// so the ring still animates meaningfully.
+function totalMs(d) {
+  const start = d.start_time ? new Date(d.start_time).getTime() : (new Date(d.end_time).getTime() - 24 * 3600 * 1000)
+  const end = new Date(d.end_time).getTime()
+  return Math.max(1, end - start)
+}
+// Remaining fraction 0..1 (1 = just started, 0 = expired).
+function remainFraction(d) {
+  const ms = remainMs(d)
+  const total = totalMs(d)
+  return Math.max(0, Math.min(1, ms / total))
+}
+// stroke-dashoffset: 0 when full, circumference when empty. The ring depletes
+// as time runs out (offset grows from 0 → C).
+function ringOffset(d) {
+  const frac = remainFraction(d)
+  return RING_C * (1 - frac)
+}
+// Color by remaining percentage: green(>50%) → orange(<50%) → red(<25%) →
+// gray(expired). Spec wants HH:MM center text, but we keep seconds precision
+// in fmtRemain for the linear bar; the ring shows HH:MM per the spec.
+function ringColor(d) {
+  const ms = remainMs(d)
+  if (ms <= 0) return '#bbb' // gray (expired)
+  const frac = remainFraction(d)
+  if (frac > 0.5) return '#07c160' // green
+  if (frac > 0.25) return '#ff976a' // orange
+  return '#e1251b' // red
+}
+// Center text in HH:MM format (seconds dropped per the spec).
+function ringText(d) {
+  const ms = remainMs(d)
+  if (ms <= 0) return '已结束'
+  const totalMin = Math.floor(ms / 60000)
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
 function progress(d) {
   return Math.min(100, Math.round((d.joined / d.required) * 100))
 }
@@ -87,7 +134,25 @@ function fmt(n) { return Number(n).toFixed(2) }
             <span class="gp-text">{{ d.joined }}/{{ d.required }}人</span>
           </div>
           <div class="gc-bottom">
-            <span class="gc-countdown">⏰ {{ fmtRemain(remainMs(d)) }}</span>
+            <!-- Feature: 拼团倒计时圆环 — SVG circular progress ring with HH:MM center -->
+            <div class="countdown-ring" :style="{ '--ring-color': ringColor(d) }">
+              <svg width="64" height="64" viewBox="0 0 64 64" class="ring-svg">
+                <!-- background track -->
+                <circle cx="32" cy="32" :r="RING_R" fill="none" stroke="#f0f0f0" stroke-width="5" />
+                <!-- depleting progress arc; stroke-dashoffset animates each second -->
+                <circle
+                  cx="32" cy="32" :r="RING_R" fill="none"
+                  :stroke="ringColor(d)"
+                  stroke-width="5"
+                  stroke-linecap="round"
+                  :stroke-dasharray="RING_C"
+                  :stroke-dashoffset="ringOffset(d)"
+                  :transform="'rotate(-90 32 32)'"
+                  class="ring-progress"
+                />
+              </svg>
+              <span class="ring-text" :style="{ color: ringColor(d) }">{{ ringText(d) }}</span>
+            </div>
             <van-button size="small" type="danger" round :disabled="d.status !== 'active'" @click="join(d)">
               {{ d.status === 'success' ? '已成团' : '去拼团' }}
             </van-button>
@@ -123,4 +188,29 @@ function fmt(n) { return Number(n).toFixed(2) }
 .gp-text { font-size: 11px; color: #e1251b; white-space: nowrap; }
 .gc-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
 .gc-countdown { color: #e1251b; font-size: 14px; font-weight: bold; font-variant-numeric: tabular-nums; }
+/* Feature: 拼团倒计时圆环 (Group Buy Countdown Ring) */
+.countdown-ring {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ring-svg { display: block; }
+/* Smooth per-second depletion of the progress arc. */
+.ring-progress {
+  transition: stroke-dashoffset 1s linear, stroke 0.5s ease;
+}
+.ring-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
 </style>

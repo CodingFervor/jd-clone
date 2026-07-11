@@ -302,6 +302,78 @@ function orderStages(o) {
     isCurrent: s.threshold === currentThreshold,
   }))
 }
+
+// ---- Feature: 评价提醒 (Order Review Reminder) ----
+// Nudge users to review completed orders. For each completed order we check
+// whether ALL of its items have been reviewed: an order is "reviewed" if every
+// product_id in its line items appears in the localStorage reviewed-products
+// set (populated when a review is submitted from ProductDetail). Reminders that
+// the user dismisses with "稍后" are tracked per-order in jd_review_dismissed.
+function reviewedProductIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem('jd_reviewed_products') || '[]'))
+  } catch {
+    return new Set()
+  }
+}
+function dismissedOrderIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem('jd_review_dismissed') || '[]'))
+  } catch {
+    return new Set()
+  }
+}
+// An order needs a review reminder when: it's completed, not dismissed, and at
+// least one of its items has not been reviewed yet.
+function needsReview(o) {
+  if (o.status !== 'completed') return false
+  if (dismissedOrderIds().has(o.id)) return false
+  const items = parseItems(o.items_json)
+  if (!items.length) return false
+  const reviewed = reviewedProductIds()
+  // Has at least one item with a product_id that hasn't been reviewed.
+  return items.some((it) => it.product_id && !reviewed.has(it.product_id))
+}
+// Dismiss the reminder for a specific order (the "稍后" button).
+function dismissReview(o) {
+  const set = dismissedOrderIds()
+  set.add(o.id)
+  localStorage.setItem('jd_review_dismissed', JSON.stringify([...set]))
+  // Trigger reactivity by bumping a refresh counter.
+  reviewTick.value++
+}
+// Go review the first un-reviewed product in this order.
+function goReview(o) {
+  const items = parseItems(o.items_json)
+  const reviewed = reviewedProductIds()
+  const target = items.find((it) => it.product_id && !reviewed.has(it.product_id))
+  if (target && target.product_id) {
+    router.push('/product/' + target.product_id)
+  } else if (items[0] && items[0].product_id) {
+    router.push('/product/' + items[0].product_id)
+  }
+}
+// A reactive tick so dismissing a reminder re-evaluates needsReview without
+// needing to mutate the order objects themselves.
+const reviewTick = ref(0)
+// When a review is confirmed from the Orders page, record it locally so the
+// reminder disappears immediately (the ProductDetail page also records it, but
+// recording here too covers the case where the user navigated back directly).
+function markReviewedFromOrder(o) {
+  const items = parseItems(o.items_json)
+  const set = reviewedProductIds()
+  let changed = false
+  for (const it of items) {
+    if (it.product_id && !set.has(it.product_id)) {
+      set.add(it.product_id)
+      changed = true
+    }
+  }
+  if (changed) {
+    localStorage.setItem('jd_reviewed_products', JSON.stringify([...set]))
+    reviewTick.value++
+  }
+}
 </script>
 
 <template>
@@ -339,6 +411,17 @@ function orderStages(o) {
             {{ statusText(o.status) }}
             <span v-if="o.status === 'pending'" class="o-countdown">（{{ countdownText(o) }}）</span>
           </span>
+        </div>
+        <!-- Feature: 评价提醒 — pulsing badge nudging review of unreviewed completed orders -->
+        <div v-if="needsReview(o)" :key="'rv-' + o.id + '-' + reviewTick" class="review-reminder">
+          <div class="rr-badge">
+            <span class="rr-icon">📝 写评价赚积分</span>
+            <span class="rr-incentive">+5积分</span>
+          </div>
+          <div class="rr-actions">
+            <van-button size="mini" type="danger" round @click="goReview(o)">去评价</van-button>
+            <van-button size="mini" plain round @click="dismissReview(o)">稍后</van-button>
+          </div>
         </div>
         <div class="o-packages">
           <div
@@ -484,6 +567,42 @@ function orderStages(o) {
 .oi-price { color: #999; font-size: 12px; margin-top: 4px; }
 .o-foot { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #f5f5f5; margin-top: 8px; font-size: 13px; }
 .o-actions { display: flex; gap: 8px; }
+/* Feature: 评价提醒 (Order Review Reminder) */
+.review-reminder {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, #fff5f5, #ffe9e8);
+  border: 1px solid #ffd6d4;
+  border-radius: 8px;
+}
+.rr-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: rr-pulse 1.6s ease-in-out infinite;
+}
+.rr-icon {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e1251b;
+}
+.rr-incentive {
+  font-size: 11px;
+  font-weight: bold;
+  color: #fff;
+  background: #e1251b;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+.rr-actions { display: flex; gap: 6px; flex-shrink: 0; }
+@keyframes rr-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.04); opacity: 0.85; }
+}
 /* Order lifecycle timeline (订单全流程时间线) */
 .o-timeline { margin-top: 12px; padding: 12px 8px 4px; background: #fafafa; border-radius: 8px; }
 .ot-item { position: relative; display: flex; gap: 12px; padding-bottom: 16px; }

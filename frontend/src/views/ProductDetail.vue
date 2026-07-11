@@ -464,6 +464,13 @@ async function submitReview() {
     reviewImages.value = []
     reviewVideo.value = ''
     showVideoInput.value = false
+    // Track reviewed product ids in localStorage so the Orders page can hide
+    // the "写评价赚积分" reminder for products the user has already reviewed.
+    try {
+      const set = new Set(JSON.parse(localStorage.getItem('jd_reviewed_products') || '[]'))
+      set.add(product.value.id)
+      localStorage.setItem('jd_reviewed_products', JSON.stringify([...set]))
+    } catch (_) { /* ignore */ }
     showSuccessToast('评价成功')
   } catch (e) {
     showToast('请先登录')
