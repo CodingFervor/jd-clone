@@ -4,6 +4,34 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { getProfile, getCheckInStatus, getOrders, listFavorites, getMyCoupons } from '../api'
 
+// ---- Notification dots (个人中心消息红点) ----
+// A red dot is shown on 售后服务 / 优惠券 / 收货地址 when that section has an
+// "update", defined as: the user last visited it more than 1 hour ago (or has
+// never visited it). Visiting a section records the timestamp and clears the
+// dot. Timestamps live in localStorage under one key per section.
+const NOTIF_SECTIONS = ['refunds', 'coupons', 'addresses']
+const ONE_HOUR_MS = 60 * 60 * 1000
+const notif = ref({ refunds: false, coupons: false, addresses: false })
+
+function refreshNotif() {
+  const now = Date.now()
+  const out = {}
+  for (const key of NOTIF_SECTIONS) {
+    const last = Number(localStorage.getItem('jd_notif_' + key)) || 0
+    out[key] = now - last > ONE_HOUR_MS
+  }
+  notif.value = out
+}
+
+// Navigate to a section and mark it visited (clearing its dot).
+function goNotif(path, key) {
+  try {
+    localStorage.setItem('jd_notif_' + key, String(Date.now()))
+  } catch (_) {}
+  notif.value[key] = false
+  router.push(path)
+}
+
 const router = useRouter()
 const user = ref(null)
 const cartCount = ref(0)
@@ -112,8 +140,14 @@ async function loadStats() {
     // keep zeros
   }
 }
-onMounted(load)
-onActivated(load)
+onMounted(() => {
+  load()
+  refreshNotif()
+})
+onActivated(() => {
+  load()
+  refreshNotif()
+})
 
 function logout() {
   localStorage.removeItem('jd_token')
@@ -243,10 +277,16 @@ function logout() {
       <van-cell title="超值拼团" is-link @click="router.push('/group-buy')" icon="friends-o" />
       <van-cell title="超值套餐" is-link @click="router.push('/bundles')" icon="gift-o" />
       <van-cell title="预售专区" is-link @click="router.push('/presale')" icon="underway-o" />
-      <van-cell title="售后服务" is-link @click="router.push('/refunds')" icon="after-sale" />
-      <van-cell title="优惠券" is-link @click="router.push('/coupons')" icon="coupon-o" />
+      <van-cell title="售后服务" is-link @click="goNotif('/refunds', 'refunds')" icon="after-sale">
+        <template #value><span v-if="notif.refunds" class="notif-dot"></span></template>
+      </van-cell>
+      <van-cell title="优惠券" is-link @click="goNotif('/coupons', 'coupons')" icon="coupon-o">
+        <template #value><span v-if="notif.coupons" class="notif-dot"></span></template>
+      </van-cell>
       <van-cell title="礼品卡" is-link @click="router.push('/gift-card')" icon="card" />
-      <van-cell title="收货地址" is-link icon="location-o" @click="router.push('/addresses')" />
+      <van-cell title="收货地址" is-link icon="location-o" @click="goNotif('/addresses', 'addresses')">
+        <template #value><span v-if="notif.addresses" class="notif-dot"></span></template>
+      </van-cell>
       <van-cell title="编辑资料" is-link icon="edit" @click="router.push('/profile')" />
       <van-cell title="PLUS会员" is-link icon="diamond-o" @click="showToast('演示功能')" />
       <!-- Dark mode toggle (深色模式) -->
@@ -400,4 +440,14 @@ function logout() {
 .gc-fill.platinum { background: linear-gradient(90deg, #80deea, #00bcd4); }
 .gc-fill.diamond  { background: linear-gradient(90deg, #ce93d8, #9c27b0); }
 .gc-fill.king     { background: linear-gradient(90deg, #ff8a80, #e1251b); }
+
+/* ---- Notification dot (个人中心消息红点) ---- */
+.notif-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e1251b;
+  vertical-align: middle;
+}
 </style>

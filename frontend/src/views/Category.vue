@@ -97,6 +97,19 @@ function isNew(p) {
 function isSeckill(p) {
   return !!(p && p.is_seckill)
 }
+
+// ---- Category promo banner carousel (分类页广告条) ----
+// 3 demo promo banners shown in a van-swipe at the top of the category content
+// area. Each carries a picsum background image plus an overlay with promo text.
+// Auto-rotates every 3s; tapping a banner toasts "活动详情".
+const promoBanners = [
+  { img: 'https://picsum.photos/seed/jdcat1/600/200', tag: '限时特惠', title: '精选好物 5折起', sub: '每日上新 抢先购' },
+  { img: 'https://picsum.photos/seed/jdcat2/600/200', tag: '新人专享', title: '领券立减 100元', sub: '首单包邮 限时领' },
+  { img: 'https://picsum.photos/seed/jdcat3/600/200', tag: '品牌狂欢', title: '大牌直降 不止5折', sub: '满199减50' },
+]
+function onBannerTap() {
+  showToast('活动详情')
+}
 </script>
 
 <template>
@@ -117,6 +130,18 @@ function isSeckill(p) {
         </div>
       </div>
       <div class="cat-content">
+        <!-- Category promo banner carousel (分类页广告条) -->
+        <van-swipe class="cat-banner" :autoplay="3000" indicator-color="#e1251b" :height="100">
+          <van-swipe-item v-for="(b, i) in promoBanners" :key="i" @click="onBannerTap">
+            <div class="cb-slide" :style="{ backgroundImage: 'url(' + b.img + ')' }">
+              <div class="cb-overlay">
+                <span class="cb-tag">{{ b.tag }}</span>
+                <div class="cb-title">{{ b.title }}</div>
+                <div class="cb-sub">{{ b.sub }}</div>
+              </div>
+            </div>
+          </van-swipe-item>
+        </van-swipe>
         <!-- Sort/filter bar -->
         <div class="sort-bar">
           <span :class="{ active: sortBy === 'default' }" @click="sortBy = 'default'">综合</span>
@@ -213,6 +238,40 @@ function isSeckill(p) {
 .cat-side-item.active { background: #fff; color: #e1251b; font-weight: bold; }
 .cat-side-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 18px; background: #e1251b; }
 .cat-content { flex: 1; background: #fff; overflow-y: auto; }
+
+/* ---- Category promo banner carousel (分类页广告条) ---- */
+.cat-banner { margin: 8px; border-radius: 10px; overflow: hidden; }
+.cb-slide {
+  width: 100%;
+  height: 100px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  cursor: pointer;
+}
+.cb-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0.1) 100%);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  color: #fff;
+}
+.cb-tag {
+  align-self: flex-start;
+  background: #e1251b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 7px;
+  border-radius: 8px;
+  line-height: 1.6;
+}
+.cb-title { font-size: 17px; font-weight: bold; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+.cb-sub { font-size: 12px; opacity: 0.92; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
 .sort-bar { display: flex; gap: 0; background: #fff; border-bottom: 1px solid #f0f0f0; position: sticky; top: 0; z-index: 5; }
 .sort-bar span { flex: 1; text-align: center; padding: 10px 0; font-size: 13px; color: #666; }
 .sort-bar span.active { color: #e1251b; font-weight: bold; }

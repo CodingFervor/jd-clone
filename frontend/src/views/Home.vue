@@ -1,8 +1,8 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, onActivated, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getSeckill, getProducts, getCategories } from '../api'
+import { getSeckill, getProducts, getCategories, getProduct } from '../api'
 
 const router = useRouter()
 const seckill = ref([])
@@ -64,6 +64,11 @@ onMounted(async () => {
   // Start the flash sale countdown ticker immediately.
   tick()
   flashTimer = setInterval(tick, 1000)
+  // Load the last-viewed product for the price-tracking floating ball and
+  // refresh its live price every 30s so the ↑/↓ badge stays accurate.
+  loadLastViewed()
+  refreshLivePrice()
+  priceBallTimer = setInterval(refreshLivePrice, 30000)
   loading.value = true
   try {
     const [sk, pl, cats] = await Promise.all([getSeckill(), getProducts({ page: 1, page_size: 20 }), getCategories()])
@@ -77,8 +82,93 @@ onMounted(async () => {
   }
 })
 
+// When returning to Home (e.g. after viewing a product), reload the tracked
+// product so the floating ball reflects the most recently viewed item. This
+// runs under keep-alive as well as on a fresh mount.
+onActivated(() => {
+  loadLastViewed()
+  refreshLivePrice()
+})
+
 function goSearch() {
   router.push('/search')
+}
+
+// ---- Product comparison floating widget (比价悬浮球) ----
+// Tracks the last-viewed product (saved by ProductDetail.vue to localStorage)
+// and surfaces a small floating ball bottom-right, above the tabbar. It shows
+// the product thumbnail + name + price and an ↑涨价 / ↓降价 badge when the
+// live price differs from the price the user saw. Tapping navigates back to
+// the product; long-pressing dismisses it.
+const lastViewed = ref(null) // { id, name, image, price, original_price }
+const livePrice = ref(null) // current price fetched from the backend
+let priceBallTimer = null
+let priceBallPressTimer = null
+
+// Price-change badge comparing the stored price to the live price.
+const priceDelta = computed(() => {
+  if (!lastViewed.value || livePrice.value == null) return null
+  const stored = Number(lastViewed.value.price) || 0
+  const live = Number(livePrice.value) || 0
+  if (!stored || !live) return null
+  if (live > stored) return 'up' // ↑涨价
+  if (live < stored) return 'down' // ↓降价
+  return null
+})
+
+// Refresh the live price for the tracked product so the badge stays current.
+async function refreshLivePrice() {
+  if (!lastViewed.value) return
+  try {
+    const res = await getProduct(lastViewed.value.id)
+    const p = res && res.data ? res.data : null
+    if (p) livePrice.value = Number(p.price) || null
+  } catch (_) {
+    // Network/backend may be unavailable; just keep the stored price.
+  }
+}
+
+function loadLastViewed() {
+  try {
+    const raw = localStorage.getItem('jd_last_viewed')
+    if (!raw) return
+    const obj = JSON.parse(raw)
+    if (obj && obj.id) lastViewed.value = obj
+  } catch (_) {
+    // ignore malformed entries
+  }
+}
+
+function goLastViewed() {
+  if (priceBallPressTimer) {
+    clearTimeout(priceBallPressTimer)
+    priceBallPressTimer = null
+  }
+  if (lastViewed.value && lastViewed.value.id) {
+    router.push('/product/' + lastViewed.value.id)
+  }
+}
+
+// Long-press (~600ms) dismisses the widget and forgets the product.
+function onBallTouchStart() {
+  priceBallPressTimer = setTimeout(() => {
+    priceBallPressTimer = null
+    dismissBall()
+  }, 600)
+}
+function onBallTouchEnd() {
+  if (priceBallPressTimer) {
+    clearTimeout(priceBallPressTimer)
+    priceBallPressTimer = null
+  }
+}
+function dismissBall() {
+  lastViewed.value = null
+  livePrice.value = null
+  try {
+    localStorage.removeItem('jd_last_viewed')
+  } catch (_) {}
+  showToast('已移除比价')
 }
 function goCategory(id) {
   router.push({ name: 'category', query: { id } })
@@ -167,6 +257,14 @@ onUnmounted(() => {
   if (flashTimer) {
     clearInterval(flashTimer)
     flashTimer = null
+  }
+  if (priceBallTimer) {
+    clearInterval(priceBallTimer)
+    priceBallTimer = null
+  }
+  if (priceBallPressTimer) {
+    clearTimeout(priceBallPressTimer)
+    priceBallPressTimer = null
   }
 })
 </script>
@@ -297,6 +395,28 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Product comparison floating widget (比价悬浮球) -->
+    <transition name="ball-pop">
+      <div
+        v-if="lastViewed"
+        class="price-ball"
+        @click="goLastViewed"
+        @touchstart.passive="onBallTouchStart"
+        @touchend="onBallTouchEnd"
+        @touchcancel="onBallTouchEnd"
+        @mousedown="onBallTouchStart"
+        @mouseup="onBallTouchEnd"
+        @mouseleave="onBallTouchEnd"
+      >
+        <van-image round width="32" height="32" :src="lastViewed.image" fit="cover" class="pb-thumb" />
+        <span class="pb-badge" :class="priceDelta" v-if="priceDelta">{{ priceDelta === 'up' ? '↑涨价' : '↓降价' }}</span>
+        <span class="pb-info">
+          <span class="pb-name van-ellipsis">{{ lastViewed.name }}</span>
+          <span class="pb-price">¥{{ fmt(livePrice != null ? livePrice : lastViewed.price) }}</span>
+        </span>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -686,4 +806,68 @@ onUnmounted(() => {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ---- Product comparison floating widget (比价悬浮球) ---- */
+.price-ball {
+  position: fixed;
+  right: 14px;
+  bottom: 70px; /* sit just above the tabbar */
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 48px;
+  height: 48px;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  cursor: pointer;
+  transition: width 0.25s ease, box-shadow 0.2s ease;
+  user-select: none;
+}
+.price-ball:hover {
+  width: 168px;
+  box-shadow: 0 6px 18px rgba(225, 37, 27, 0.28);
+}
+.pb-thumb {
+  flex-shrink: 0;
+  border: 2px solid #ffe3e0;
+}
+.pb-badge {
+  position: absolute;
+  top: -6px;
+  left: 30px;
+  z-index: 3;
+  font-size: 9px;
+  font-weight: bold;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 8px;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.pb-badge.up { background: #e1251b; }
+.pb-badge.down { background: #07c160; }
+.pb-info {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+.price-ball:hover .pb-info { display: flex; }
+.pb-name {
+  font-size: 11px;
+  color: #333;
+  max-width: 96px;
+}
+.pb-price {
+  font-size: 13px;
+  font-weight: bold;
+  color: #e1251b;
+}
+.ball-pop-enter-active, .ball-pop-leave-active { transition: opacity 0.25s, transform 0.25s; }
+.ball-pop-enter-from, .ball-pop-leave-to { opacity: 0; transform: scale(0.4) translateY(10px); }
 </style>

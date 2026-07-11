@@ -247,6 +247,28 @@ onMounted(async () => {
     product.value = res.data
     reviews.value = res.reviews || []
     skus.value = res.skus || []
+    // ---- 比价悬浮球: remember the last-viewed product so the Home page can
+    // surface a floating price-tracking widget. We snapshot the id, name,
+    // thumbnail and the price the user saw at this visit. On the next Home
+    // visit the widget compares this stored price with the live one.
+    try {
+      const p = res.data
+      if (p && p.id) {
+        localStorage.setItem(
+          'jd_last_viewed',
+          JSON.stringify({
+            id: p.id,
+            name: p.name,
+            image: p.image,
+            price: Number(p.price) || 0,
+            original_price: Number(p.original_price) || 0,
+            visited_at: Date.now(),
+          })
+        )
+      }
+    } catch (_) {
+      // localStorage may be unavailable (private mode); ignore.
+    }
     // Compute the estimated delivery label once on load.
     deliveryEstimate.value = computeDelivery()
     // Auto-select the recommended (best-value) SKU.

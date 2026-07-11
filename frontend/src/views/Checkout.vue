@@ -4,6 +4,34 @@ import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { getCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts } from '../api'
 
+// ---- Checkout error recovery (结算错误恢复) ----
+// Graceful handling of createOrder failures with three recovery paths:
+//   1. Stock/price change → "商品信息已更新" dialog with retry + 返回购物车
+//   2. Network timeout → auto-retry with a 3s countdown
+//   3. After 3 failed attempts → "请联系客服" with a phone icon
+// The error overlay (van-dialog) is driven by these refs.
+const MAX_RETRIES = 3
+const errorVisible = ref(false)
+const errorTitle = ref('')
+const errorMessage = ref('')
+const errorType = ref('') // 'stock' | 'timeout' | 'support'
+const retryCount = ref(0)
+const retryCountdown = ref(0) // seconds remaining for auto-retry
+let retryTimer = null
+
+function isTimeoutError(e) {
+  // Axios raises ECONNABORTED on timeout; also match the message as a fallback.
+  return e?.code === 'ECONNABORTED' || /timeout/i.test(e?.message || '')
+}
+
+function isStockPriceError(e) {
+  // HTTP 409 Conflict or an error message hinting at stock/price changes.
+  const status = e?.response?.status
+  const msg = (e?.response?.data?.error || e?.message || '').toString()
+  if (status === 409) return true
+  return /库存|价格|stock|price|已更新|已变动|售罄/i.test(msg)
+}
+
 const router = useRouter()
 const items = ref([])
 const address = ref('')
@@ -120,6 +148,13 @@ function couponLabel(uc) {
 }
 
 async function submit() {
+  await attemptOrder()
+}
+
+// Attempt to place the order. On success, run the celebration and route away.
+// On failure, route into the error-recovery flow (stock change / timeout /
+// max-retries → contact support).
+async function attemptOrder() {
   try {
     await createOrder({
       items: items.value.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
@@ -127,6 +162,10 @@ async function submit() {
       user_coupon_id: selectedCouponId.value || undefined,
       remark: remark.value,
     })
+    // Reset retry state after a successful order.
+    retryCount.value = 0
+    errorVisible.value = false
+    stopRetryCountdown()
     // Show the success celebration overlay, then navigate to /orders after 2s.
     showSuccess.value = true
     spawnSuccessConfetti()
@@ -135,8 +174,94 @@ async function submit() {
       router.replace('/orders')
     }, 2000)
   } catch (e) {
-    showToast(e.response?.data?.error || '下单失败')
+    handleError(e)
   }
+}
+
+// Classify the error and surface the matching recovery UI.
+function handleError(e) {
+  retryCount.value += 1
+  const msg = (e?.response?.data?.error || e?.message || '下单失败').toString()
+
+  // After MAX_RETRIES attempts, fall through to the contact-support dialog.
+  if (retryCount.value > MAX_RETRIES) {
+    showSupportDialog()
+    return
+  }
+
+  if (isStockPriceError(e)) {
+    // Stock/price changed: let the user retry or go back to the cart.
+    errorTitle.value = '商品信息已更新'
+    errorMessage.value = '购物车中商品的价格或库存已变化，请确认后重新提交'
+    errorType.value = 'stock'
+    errorVisible.value = true
+    stopRetryCountdown()
+    return
+  }
+
+  if (isTimeoutError(e)) {
+    // Network timeout: auto-retry with a 3s countdown.
+    errorTitle.value = '网络请求超时'
+    errorMessage.value = `3秒后自动重试... (第${retryCount.value}次)`
+    errorType.value = 'timeout'
+    errorVisible.value = true
+    startRetryCountdown()
+    return
+  }
+
+  // Generic error: show message with a retry button. If retries keep piling
+  // up beyond the limit we'll end up at the support dialog on the next fail.
+  errorTitle.value = '下单失败'
+  errorMessage.value = msg
+  errorType.value = 'stock'
+  errorVisible.value = true
+  stopRetryCountdown()
+}
+
+function showSupportDialog() {
+  errorTitle.value = '请联系客服'
+  errorMessage.value = '多次尝试均失败，请联系客服为您处理订单'
+  errorType.value = 'support'
+  errorVisible.value = true
+  stopRetryCountdown()
+}
+
+// Countdown-driven auto-retry for network timeouts: tick 3→2→1 then retry.
+function startRetryCountdown() {
+  stopRetryCountdown()
+  retryCountdown.value = 3
+  retryTimer = setInterval(() => {
+    retryCountdown.value -= 1
+    errorMessage.value = `${retryCountdown.value}秒后自动重试... (第${retryCount.value}次)`
+    if (retryCountdown.value <= 0) {
+      stopRetryCountdown()
+      errorVisible.value = false
+      attemptOrder()
+    }
+  }, 1000)
+}
+
+function stopRetryCountdown() {
+  if (retryTimer) {
+    clearInterval(retryTimer)
+    retryTimer = null
+  }
+  retryCountdown.value = 0
+}
+
+// Manual retry from the dialog button.
+function manualRetry() {
+  errorVisible.value = false
+  stopRetryCountdown()
+  attemptOrder()
+}
+
+// Return to the cart and reset retry state.
+function backToCart() {
+  errorVisible.value = false
+  stopRetryCountdown()
+  retryCount.value = 0
+  router.push('/cart')
 }
 async function submitInvoice() {
   if (!invoiceForm.value.title.trim()) { showToast('请填写发票抬头'); return }
@@ -156,6 +281,7 @@ onUnmounted(() => {
     clearTimeout(successTimer)
     successTimer = null
   }
+  stopRetryCountdown()
 })
 </script>
 
@@ -301,6 +427,36 @@ onUnmounted(() => {
             </svg>
           </div>
           <div class="success-text">下单成功！</div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Checkout error recovery dialog (结算错误恢复) -->
+    <transition name="err-fade">
+      <div v-if="errorVisible" class="err-mask" @click.self="errorType === 'timeout' ? null : (errorVisible = false)">
+        <div class="err-box">
+          <div class="err-icon">
+            <van-icon v-if="errorType === 'support'" name="phone-o" />
+            <van-icon v-else name="warning-o" />
+          </div>
+          <div class="err-title">{{ errorTitle }}</div>
+          <div class="err-message">{{ errorMessage }}</div>
+          <div class="err-actions">
+            <!-- Support state: only a phone/contact button -->
+            <template v-if="errorType === 'support'">
+              <van-button block round type="danger" icon="phone-o" @click="showToast('客服热线：400-606-5500')">联系客服</van-button>
+              <van-button block round plain @click="retryCount = 0; errorVisible = false">关闭</van-button>
+            </template>
+            <!-- Stock/price change: retry + return to cart -->
+            <template v-else-if="errorType === 'stock'">
+              <van-button block round plain @click="backToCart">返回购物车</van-button>
+              <van-button block round type="danger" icon="reload" @click="manualRetry">重试</van-button>
+            </template>
+            <!-- Timeout: auto-retrying — only offer cancel -->
+            <template v-else>
+              <van-button block round plain @click="stopRetryCountdown(); errorVisible = false">取消</van-button>
+            </template>
+          </div>
         </div>
       </div>
     </transition>
@@ -516,4 +672,53 @@ onUnmounted(() => {
 /* Overlay enter/leave transition */
 .success-fade-enter-active, .success-fade-leave-active { transition: opacity 0.25s; }
 .success-fade-enter-from, .success-fade-leave-to { opacity: 0; }
+
+/* ---- Checkout error recovery dialog (结算错误恢复) ---- */
+.err-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3200;
+  padding: 0 32px;
+}
+.err-box {
+  width: 100%;
+  max-width: 320px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 28px 22px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.err-icon {
+  font-size: 48px;
+  color: #e1251b;
+  margin-bottom: 12px;
+  line-height: 1;
+}
+.err-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 8px;
+}
+.err-message {
+  font-size: 13px;
+  color: #999;
+  line-height: 20px;
+  margin-bottom: 22px;
+}
+.err-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.err-fade-enter-active, .err-fade-leave-active { transition: opacity 0.2s; }
+.err-fade-enter-from, .err-fade-leave-to { opacity: 0; }
 </style>
