@@ -10,7 +10,72 @@ const loading = ref(true)
 const now = ref(Date.now())
 let timer = null
 
+// ---- Feature: 限时抢购提醒 (Flash Deal Reminder) ----
+// Reminded deal ids are persisted in localStorage as a JSON array under
+// 'jd_seckill_reminder'. Toggling the 🔔 button adds/removes a deal id and
+// flips the button to a "已设置提醒" state.
+const remindedIds = ref([])
+
+function loadReminders() {
+  try {
+    const raw = localStorage.getItem('jd_seckill_reminder')
+    const arr = raw ? JSON.parse(raw) : []
+    remindedIds.value = Array.isArray(arr) ? arr.map((x) => Number(x)).filter(Number.isFinite) : []
+  } catch (_) {
+    remindedIds.value = []
+  }
+}
+
+function saveReminders() {
+  try {
+    localStorage.setItem('jd_seckill_reminder', JSON.stringify(remindedIds.value))
+  } catch (_) {
+    // localStorage may be unavailable; ignore.
+  }
+}
+
+function isReminded(d) {
+  return remindedIds.value.includes(Number(d.id))
+}
+
+// Toggle the reminder for a deal. Setting it on surfaces a toast simulating
+// the push notification being scheduled; turning it off cancels it.
+function toggleReminder(d) {
+  const id = Number(d.id)
+  if (isReminded(d)) {
+    remindedIds.value = remindedIds.value.filter((x) => x !== id)
+    saveReminders()
+    showToast('已取消提醒')
+  } else {
+    remindedIds.value = [...remindedIds.value, id]
+    saveReminders()
+    showSuccessToast('已设置提醒，开始前通知您')
+  }
+}
+
+// Time remaining (ms) until a deal's start_time. When the deal has already
+// started (start in the past), this returns 0 so the badge degrades to the
+// "进行中" state instead of showing a negative countdown.
+function remainToStartMs(d) {
+  if (!d.start_time) return 0
+  return Math.max(0, new Date(d.start_time).getTime() - now.value)
+}
+
+// A deal is "即将开始" (about to start) when its start is within the next hour
+// but has not yet passed. Used to flip the countdown badge to red urgency.
+function isStartingSoon(d) {
+  const ms = remainToStartMs(d)
+  return ms > 0 && ms < 3600000
+}
+
+// Whether the deal is still upcoming (has not started yet). When false the
+// start-countdown badge is hidden and the existing end-countdown is shown.
+function isUpcoming(d) {
+  return remainToStartMs(d) > 0
+}
+
 onMounted(async () => {
+  loadReminders()
   try { deals.value = await getSeckillDeals() } catch (e) { showToast('加载失败') } finally { loading.value = false }
   timer = setInterval(() => { now.value = Date.now() }, 1000)
 })
@@ -71,11 +136,28 @@ function fmt(n) { return Number(n).toFixed(2) }
             <div class="dp-bar" :class="{ 'dp-bar--urgent': isLowStock(d) }"><div class="dp-fill" :style="{ width: progress(d) + '%' }"></div></div>
             <span class="dp-text">已抢{{ progress(d) }}%</span>
           </div>
+          <!-- Feature: 限时抢购提醒 — live start countdown badge. Turns red
+               and shows "即将开始!" when under 1 hour remains. -->
+          <div v-if="isUpcoming(d)" class="dc-start-badge" :class="{ 'starting-soon': isStartingSoon(d) }">
+            <span v-if="isStartingSoon(d)" class="dsb-soon">🔥 即将开始!</span>
+            <span v-else class="dsb-count">⏳ {{ fmtRemain(remainToStartMs(d)) }}后开始</span>
+          </div>
           <div class="dc-bottom">
             <span class="dc-countdown">⏰ {{ fmtRemain(remainMs(d)) }}</span>
-            <van-button class="grab-btn" :class="{ 'grab-btn--pulse': progress(d) < 100 }" size="small" type="danger" round :disabled="progress(d) >= 100" @click="grab(d)">
-              {{ progress(d) >= 100 ? '已抢光' : '马上抢' }}
-            </van-button>
+            <div class="dc-btns">
+              <!-- Feature: 限时抢购提醒 — toggle reminder button -->
+              <van-button
+                class="remind-btn"
+                :class="{ 'remind-btn--on': isReminded(d) }"
+                size="small"
+                plain
+                round
+                @click="toggleReminder(d)"
+              >{{ isReminded(d) ? '🔔 已设置提醒' : '🔔 提醒我' }}</van-button>
+              <van-button class="grab-btn" :class="{ 'grab-btn--pulse': progress(d) < 100 }" size="small" type="danger" round :disabled="progress(d) >= 100" @click="grab(d)">
+                {{ progress(d) >= 100 ? '已抢光' : '马上抢' }}
+              </van-button>
+            </div>
           </div>
         </div>
       </div>
@@ -116,6 +198,35 @@ function fmt(n) { return Number(n).toFixed(2) }
 .dp-text { font-size: 11px; color: #e1251b; white-space: nowrap; }
 .dc-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
 .dc-countdown { color: #e1251b; font-size: 14px; font-weight: bold; font-variant-numeric: tabular-nums; }
+/* Feature: 限时抢购提醒 — start countdown badge + reminder button */
+.dc-btns { display: flex; gap: 6px; align-items: center; }
+.dc-start-badge {
+  align-self: flex-start;
+  margin: 4px 0 6px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: #fff7e6;
+  color: #ff7a18;
+  border: 1px solid #ffd591;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+.dc-start-badge.starting-soon {
+  background: linear-gradient(90deg, #e1251b, #ff4d4f);
+  color: #fff;
+  border-color: #e1251b;
+  font-weight: bold;
+  animation: dsb-blink 0.8s steps(2, start) infinite;
+}
+.dsb-soon { white-space: nowrap; }
+@keyframes dsb-blink { 50% { opacity: 0.55; } }
+.remind-btn { flex-shrink: 0; }
+.remind-btn--on {
+  color: #e1251b !important;
+  border-color: #e1251b !important;
+  background: #fff5f5 !important;
+}
 /* Feature 2: 库存不足时进度条紧迫感抖动 */
 .dp-bar--urgent { animation: urgent-shake 0.5s infinite; }
 @keyframes urgent-shake {

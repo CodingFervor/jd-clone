@@ -64,6 +64,144 @@ function spawnSuccessConfetti() {
   }))
 }
 
+// ---- Feature: 下单幸运抽奖 (Lucky Draw) ----
+// A slot-machine style mini-game shown inside the order-success overlay.
+// Three columns scroll product names borrowed from the just-placed order.
+// Pulling the 🎲 lever stops the columns left-to-right (500ms apart). Matching
+// all three = 一等奖 (88折券), two match = 二等奖 (10元券), else 谢谢参与.
+// "再来一次" costs 50 积分 (points) — purely visual, tracked here.
+const showLuckyDraw = ref(false)
+const drawColumns = ref([[], [], []]) // three columns of names (the "reel")
+const drawFinal = ref(['', '', '']) // the landed name in each column
+const colSpinning = ref([false, false, false]) // which columns are still spinning
+const colStopped = ref([false, false, false]) // which columns have landed
+const drawResult = ref(null) // { tier: 'first'|'second'|'none', label }
+const drawConfetti = ref([])
+const drawPoints = ref(Number(localStorage.getItem('jd_draw_points') || 666)) // demo points balance
+let drawSpinTimer = null
+let drawColumnTimer = null
+
+// Build the three reels from the order's product names. We fall back to a
+// small generic pool when the order has no items (shouldn't happen in normal
+// flow, but keeps the slot from being empty).
+function buildDrawReels() {
+  let names = items.value.map((i) => i.product_name).filter(Boolean)
+  if (names.length < 2) names = ['京东好物', '限时特惠', '精选商品', '热销单品', '品质优选']
+  // Each column shows a short list of names cycled for the scroll effect.
+  const buildCol = () => {
+    const arr = []
+    for (let i = 0; i < 8; i++) {
+      arr.push(names[Math.floor(Math.random() * names.length)])
+    }
+    return arr
+  }
+  drawColumns.value = [buildCol(), buildCol(), buildCol()]
+  drawFinal.value = ['', '', '']
+  colSpinning.value = [false, false, false]
+  colStopped.value = [false, false, false]
+  drawResult.value = null
+}
+
+// Open the lucky draw from the success overlay.
+function openLuckyDraw() {
+  buildDrawReels()
+  showLuckyDraw.value = true
+}
+
+// Pull the lever: start all three columns spinning, then stop them one by one
+// left-to-right with 500ms gaps. The final landed names are decided up front
+// and the columns are locked to those names when they stop.
+function pullLever() {
+  if (colSpinning.value.some((s) => s)) return // already spinning
+  buildDrawReels()
+  drawResult.value = null
+  colSpinning.value = [true, true, true]
+  colStopped.value = [false, false, false]
+
+  // Decide each column's landed name up front so we can force it on stop.
+  const pool = items.value.map((i) => i.product_name).filter(Boolean)
+  const namesPool = pool.length >= 2 ? pool : ['京东好物', '限时特惠', '精选商品', '热销单品', '品质优选']
+  const landed = [
+    namesPool[Math.floor(Math.random() * namesPool.length)],
+    namesPool[Math.floor(Math.random() * namesPool.length)],
+    namesPool[Math.floor(Math.random() * namesPool.length)],
+  ]
+
+  // Stop columns left-to-right, 500ms apart.
+  landed.forEach((name, idx) => {
+    setTimeout(() => stopColumn(idx, name), 500 * (idx + 1))
+  })
+}
+
+function stopColumn(idx, name) {
+  colSpinning.value[idx] = false
+  colStopped.value[idx] = true
+  drawFinal.value[idx] = name
+  // When the last column stops, evaluate the result.
+  if (idx === 2) {
+    setTimeout(evaluateDraw, 250)
+  }
+}
+
+// Determine the prize tier from the three landed names.
+function evaluateDraw() {
+  const [a, b, c] = drawFinal.value
+  let tier = 'none'
+  let label = '谢谢参与'
+  if (a === b && b === c) {
+    tier = 'first'
+    label = '🎉 一等奖! 88折券'
+  } else if (a === b || b === c || a === c) {
+    tier = 'second'
+    label = '🎁 二等奖 10元券'
+  }
+  drawResult.value = { tier, label }
+  if (tier !== 'none') spawnDrawConfetti()
+}
+
+function spawnDrawConfetti() {
+  const emojis = ['🎉', '🎊', '✨', '🎁', '🎈', '⭐']
+  drawConfetti.value = Array.from({ length: 28 }, (_, i) => ({
+    id: i,
+    emoji: emojis[Math.floor(Math.random() * emojis.length)],
+    left: Math.random() * 100,
+    delay: Math.random() * 0.5,
+    duration: 1.4 + Math.random() * 1.2,
+    size: 16 + Math.random() * 18,
+  }))
+}
+
+// "再来一次": costs 50 积分 (visual deduction only). Deducts from the local
+// demo points balance persisted in localStorage, then re-spins.
+function drawAgain() {
+  if (drawPoints.value < 50) {
+    showToast('积分不足，无法再次抽奖')
+    return
+  }
+  drawPoints.value -= 50
+  localStorage.setItem('jd_draw_points', String(drawPoints.value))
+  showToast('消耗50积分')
+  pullLever()
+}
+
+// Close the lucky draw, then the success overlay, and navigate to /orders.
+function closeLuckyDraw() {
+  showLuckyDraw.value = false
+  drawConfetti.value = []
+  finishSuccess()
+}
+
+// Tear down success overlay and route to the orders page. Shared by the
+// auto-dismiss timeout and the manual lucky-draw close.
+function finishSuccess() {
+  showSuccess.value = false
+  if (successTimer) {
+    clearTimeout(successTimer)
+    successTimer = null
+  }
+  router.replace('/orders')
+}
+
 const subtotal = computed(() => items.value.reduce((s, i) => s + i.price * i.quantity, 0))
 
 // Usable coupons: unused and meeting the threshold.
@@ -166,13 +304,12 @@ async function attemptOrder() {
     retryCount.value = 0
     errorVisible.value = false
     stopRetryCountdown()
-    // Show the success celebration overlay, then navigate to /orders after 2s.
+    // Show the success celebration overlay. The overlay now stays open so the
+    // user can play the 下单幸运抽奖 mini-game; tapping the lucky draw or the
+    // finish button dismisses it and routes to /orders. The brief confetti
+    // still plays for the initial celebration.
     showSuccess.value = true
     spawnSuccessConfetti()
-    successTimer = setTimeout(() => {
-      showSuccess.value = false
-      router.replace('/orders')
-    }, 2000)
   } catch (e) {
     handleError(e)
   }
@@ -427,7 +564,87 @@ onUnmounted(() => {
             </svg>
           </div>
           <div class="success-text">下单成功！</div>
+          <!-- Feature: 下单幸运抽奖 — entry button (shown while not playing) -->
+          <van-button
+            v-if="!showLuckyDraw"
+            class="lucky-entry-btn"
+            round
+            type="danger"
+            icon="gift-o"
+            @click="openLuckyDraw"
+          >🎁 幸运抽奖</van-button>
+          <van-button
+            v-if="!showLuckyDraw"
+            class="success-finish-btn"
+            round
+            plain
+            @click="finishSuccess"
+          >完成</van-button>
         </div>
+
+        <!-- Feature: 下单幸运抽奖 — slot machine panel -->
+        <transition name="draw-pop">
+          <div v-if="showLuckyDraw" class="lucky-panel" @click.stop>
+            <div class="lucky-title">🎁 下单幸运抽奖</div>
+            <div class="lucky-sub">拉杆开启好运 · 下单专属福利</div>
+            <!-- Three scrolling columns -->
+            <div class="slot-machine">
+              <div
+                v-for="(col, ci) in drawColumns"
+                :key="ci"
+                class="slot-col"
+                :class="{ spinning: colSpinning[ci], stopped: colStopped[ci] }"
+              >
+                <div class="slot-strip">
+                  <span
+                    v-for="(name, ni) in col"
+                    :key="ni"
+                    class="slot-item"
+                  >{{ name }}</span>
+                </div>
+                <div v-if="colStopped[ci] && drawFinal[ci]" class="slot-landed">{{ drawFinal[ci] }}</div>
+              </div>
+            </div>
+            <!-- Result banner -->
+            <transition name="res-pop">
+              <div v-if="drawResult" class="draw-result" :class="'dr-' + drawResult.tier">
+                {{ drawResult.label }}
+              </div>
+            </transition>
+            <!-- Draw confetti for winners -->
+            <div v-if="drawConfetti.length" class="draw-confetti">
+              <span
+                v-for="c in drawConfetti"
+                :key="c.id"
+                class="dc-piece"
+                :style="{
+                  left: c.left + '%',
+                  animationDelay: c.delay + 's',
+                  animationDuration: c.duration + 's',
+                  fontSize: c.size + 'px',
+                }"
+              >{{ c.emoji }}</span>
+            </div>
+            <!-- Lever / actions -->
+            <div class="lucky-actions">
+              <van-button
+                v-if="!colSpinning.some((s) => s) && !drawResult"
+                round
+                block
+                type="danger"
+                icon="like-o"
+                @click="pullLever"
+              >🎲 抽奖</van-button>
+              <template v-if="drawResult">
+                <van-button round block type="danger" @click="drawAgain">
+                  再来一次 (消耗50积分 · 当前{{ drawPoints }})
+                </van-button>
+                <van-button round block plain @click="closeLuckyDraw">收下奖品</van-button>
+              </template>
+              <van-button v-if="!drawResult && !colSpinning.some((s) => s)" round block plain @click="closeLuckyDraw">跳过</van-button>
+            </div>
+          </div>
+        </transition>
       </div>
     </transition>
 
@@ -672,6 +889,134 @@ onUnmounted(() => {
 /* Overlay enter/leave transition */
 .success-fade-enter-active, .success-fade-leave-active { transition: opacity 0.25s; }
 .success-fade-enter-from, .success-fade-leave-to { opacity: 0; }
+
+/* ---- Feature: 下单幸运抽奖 (Lucky Draw) ---- */
+.lucky-entry-btn {
+  margin-top: 4px;
+  font-weight: 600;
+  animation: lucky-pulse 1.4s ease-in-out infinite;
+}
+@keyframes lucky-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.success-finish-btn {
+  margin-top: 10px;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.7);
+  min-width: 96px;
+}
+.lucky-panel {
+  position: relative;
+  width: min(92vw, 360px);
+  margin-top: 18px;
+  background: linear-gradient(180deg, #fff5f5 0%, #fff 40%);
+  border-radius: 18px;
+  padding: 20px 16px 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  z-index: 3;
+}
+.draw-pop-enter-active, .draw-pop-leave-active { transition: transform 0.3s ease, opacity 0.3s ease; }
+.draw-pop-enter-from, .draw-pop-leave-to { transform: scale(0.85); opacity: 0; }
+.lucky-title { text-align: center; font-size: 18px; font-weight: bold; color: #e1251b; }
+.lucky-sub { text-align: center; font-size: 12px; color: #999; margin-top: 2px; margin-bottom: 14px; }
+.slot-machine {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  background: #1a1a1a;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.slot-col {
+  position: relative;
+  width: 84px;
+  height: 64px;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slot-col.stopped {
+  border-color: #e1251b;
+  box-shadow: 0 0 8px rgba(225, 37, 27, 0.5);
+}
+.slot-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+/* Spinning columns scroll their names vertically in a tight loop */
+.slot-col.spinning .slot-strip {
+  animation: slot-scroll 0.4s linear infinite;
+}
+@keyframes slot-scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-64px); }
+}
+.slot-item {
+  font-size: 12px;
+  color: #333;
+  line-height: 32px;
+  height: 32px;
+  text-align: center;
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+/* When stopped, hide the scrolling strip and show the landed name centered */
+.slot-col.stopped .slot-strip { display: none; }
+.slot-landed {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e1251b;
+  text-align: center;
+  padding: 0 6px;
+  line-height: 18px;
+  word-break: break-all;
+}
+/* Result banner */
+.draw-result {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 10px;
+  border-radius: 10px;
+}
+.draw-result.dr-first { color: #fff; background: linear-gradient(90deg, #e1251b, #ff7a18); animation: res-bounce 0.5s ease; }
+.draw-result.dr-second { color: #e1251b; background: #fff0ee; border: 1px solid #ffd9d3; animation: res-bounce 0.5s ease; }
+.draw-result.dr-none { color: #999; background: #f7f8fa; }
+@keyframes res-bounce {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.res-pop-enter-active, .res-pop-leave-active { transition: all 0.3s ease; }
+.res-pop-enter-from, .res-pop-leave-to { transform: scale(0.5); opacity: 0; }
+.lucky-actions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+/* Winner confetti inside the panel */
+.draw-confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: 18px; }
+.dc-piece {
+  position: absolute;
+  top: -30px;
+  animation-name: dc-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: 2;
+}
+@keyframes dc-fall {
+  0% { transform: translateY(-30px) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(400px) rotate(360deg); opacity: 0; }
+}
 
 /* ---- Checkout error recovery dialog (结算错误恢复) ---- */
 .err-mask {

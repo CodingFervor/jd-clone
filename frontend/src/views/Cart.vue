@@ -79,14 +79,45 @@ const recommendations = ref([])
 
 async function loadRecommendations() {
   try {
-    const res = await getProducts({ page: 1, page_size: 4 })
+    // Fetch more items so we have enough distinct products to pair with each
+    // cart line for the "搭配购买" suggestions (one per cart item, different
+    // from the item itself and from the "猜你喜欢" cards).
+    const res = await getProducts({ page: 1, page_size: 12 })
     // Support both { data: { data, list } } and { data: [...] } shapes.
     const list = res.data?.data || res.data?.list || res.data || []
     recommendations.value = (Array.isArray(list) ? list : []).slice(0, 4)
+    addonPool.value = (Array.isArray(list) ? list : []).slice(0, 12)
   } catch (e) {
     recommendations.value = []
+    addonPool.value = []
   }
 }
+
+// ---- Feature: 购物车推荐配件 (搭配购买) ----
+// A pool of products to draw add-on suggestions from. We keep a wider pool
+// than the "猜你喜欢" cards so each cart line can be paired with a distinct
+// suggestion that isn't already in the cart.
+const addonPool = ref([])
+
+// For each cart item, pick one suggestion (by id) that differs from the item
+// itself and from products already in the cart. Suggestions are deduped across
+// lines so two cart items don't recommend the same add-on. Falls back to [].
+const addonSuggestions = computed(() => {
+  if (!items.value.length || !addonPool.value.length) return []
+  const usedIds = new Set()
+  const cartIds = new Set(items.value.map((i) => Number(i.product_id)))
+  const suggestions = []
+  for (const it of items.value) {
+    const pick = addonPool.value.find(
+      (p) => Number(p.id) !== Number(it.product_id) && !cartIds.has(Number(p.id)) && !usedIds.has(Number(p.id))
+    )
+    if (pick) {
+      usedIds.add(Number(pick.id))
+      suggestions.push({ item: it, product: pick })
+    }
+  }
+  return suggestions
+})
 
 async function load() {
   loading.value = true
@@ -391,6 +422,42 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <!-- Feature: 购物车推荐配件 (搭配购买) — "买了A的人还买了" suggestions,
+           one per cart item, drawn from the recommendation pool and excluding
+           items already in the cart. Shown only when the cart has items. -->
+      <div v-if="addonSuggestions.length" class="addon-section">
+        <div class="addon-title">🎁 搭配购买</div>
+        <div
+          v-for="(s, idx) in addonSuggestions"
+          :key="'addon-' + s.item.id + '-' + s.product.id"
+          class="addon-row"
+        >
+          <div class="addon-pair">
+            <div class="addon-anchor">
+              <van-image width="44" height="44" radius="4" :src="s.item.product_image" fit="cover" />
+              <span class="addon-anchor-name van-ellipsis">{{ s.item.product_name }}</span>
+            </div>
+            <span class="addon-arrow">→</span>
+            <div class="addon-suggest" @click="router.push('/product/' + s.product.id)">
+              <van-image width="54" height="54" radius="6" :src="s.product.image" fit="cover" />
+              <div class="addon-suggest-info">
+                <div class="addon-hint">买了{{ idx === 0 ? '该商品' : '上面' }}的人还买了</div>
+                <div class="addon-suggest-name van-multi-ellipsis--l2">{{ s.product.name }}</div>
+                <div class="addon-suggest-bottom">
+                  <span class="addon-suggest-price">¥{{ fmt(s.product.price) }}</span>
+                  <van-button
+                    size="mini"
+                    type="danger"
+                    round
+                    @click.stop="quickAdd(s.product)"
+                  >加入</van-button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <van-swipe-cell v-for="it in items" :key="it.id">
         <template #left>
           <div class="swipe-left-btn" @click="moveToFavorite(it)">移至收藏夹</div>
@@ -604,6 +671,21 @@ onUnmounted(() => {
 .rec-name { font-size: 12px; line-height: 16px; height: 32px; margin-top: 6px; }
 .rec-bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px; }
 .rec-price { color: #e1251b; font-size: 14px; font-weight: 600; }
+/* Feature: 购物车推荐配件 (搭配购买) */
+.addon-section { background: #fff; margin-bottom: 8px; padding: 12px; }
+.addon-title { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.addon-row { padding: 8px 0; border-top: 1px solid #f5f5f5; }
+.addon-row:first-of-type { border-top: none; padding-top: 0; }
+.addon-pair { display: flex; align-items: center; gap: 8px; }
+.addon-anchor { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 56px; flex-shrink: 0; }
+.addon-anchor-name { font-size: 10px; color: #999; max-width: 56px; text-align: center; }
+.addon-arrow { color: #ccc; font-size: 16px; flex-shrink: 0; }
+.addon-suggest { display: flex; gap: 8px; flex: 1; min-width: 0; cursor: pointer; }
+.addon-suggest-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.addon-hint { font-size: 11px; color: #ff7a18; margin-bottom: 2px; }
+.addon-suggest-name { font-size: 13px; color: #333; line-height: 16px; }
+.addon-suggest-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
+.addon-suggest-price { color: #e1251b; font-size: 15px; font-weight: 600; }
 /* 反选 button + 已选N件 count inside the submit bar */
 .invert-btn { margin-left: 10px; padding: 3px 10px; font-size: 12px; color: #e1251b; border: 1px solid #e1251b; border-radius: 12px; cursor: pointer; white-space: nowrap; }
 .selected-count { margin-left: 10px; font-size: 12px; color: #999; white-space: nowrap; }

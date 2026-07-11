@@ -29,6 +29,42 @@ const showQA = ref(false)
 const qaQuestion = ref('')
 const relatedProducts = ref([])
 const loading = ref(true)
+// ---- Feature: 商品视频自动播放 (Product Video Auto-play) ----
+// The product intro video auto-plays (muted) once scrolled 50% into view via
+// an IntersectionObserver, pauses when scrolled away, and exposes a manual
+// play/pause toggle plus a tap-to-unmute overlay. All refs degrade gracefully
+// when the product has no video_url (the whole video block is v-if-guarded).
+const videoRef = ref(null) // bound to the <video> element
+const videoMuted = ref(true) // auto-play must start muted per browser policy
+const videoPlaying = ref(false) // mirrors the video's playing/paused state
+const videoVisible = ref(false) // whether the video is currently in the viewport
+let videoObserver = null
+
+// Toggle between play and pause (manual control button). Preferred over the
+// native controls overlay so the toggle state stays in sync with auto-play.
+function toggleVideoPlay() {
+  const v = videoRef.value
+  if (!v) return
+  if (v.paused) {
+    v.play().catch(() => { /* autoplay can be blocked; ignore */ })
+  } else {
+    v.pause()
+  }
+}
+
+// Unmute the video (the auto-play started muted). Triggered by the 🔇 overlay
+// tap so we keep the user-gesture requirement browsers enforce for sound.
+function unmuteVideo() {
+  const v = videoRef.value
+  videoMuted.value = false
+  if (v) v.muted = false
+}
+
+// Bind native media events to our reactive flags so the UI stays accurate
+// even when autoplay or the OS media keys change playback state.
+function onVideoPlay() { videoPlaying.value = true }
+function onVideoPause() { videoPlaying.value = false }
+function onVideoEnded() { videoPlaying.value = false }
 const showReview = ref(false)
 const reviewRating = ref(5)
 const reviewContent = ref('')
@@ -297,7 +333,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
     // Wire up the sticky tab IntersectionObserver once the DOM has rendered.
-    nextTick(() => setupSectionObserver())
+    nextTick(() => {
+      setupSectionObserver()
+      setupVideoObserver()
+    })
   }
 })
 
@@ -648,10 +687,42 @@ function setupSectionObserver() {
   }
 }
 
+// ---- Feature: 商品视频自动播放 — IntersectionObserver wiring ----
+// Observe the product video element. When at least 50% of it is in view we
+// auto-play it (muted, because browsers block autoplay-with-sound); when it
+// scrolls away we pause it. No-op if IntersectionObserver is unavailable or
+// the product has no video.
+function setupVideoObserver() {
+  if (typeof IntersectionObserver === 'undefined') return
+  const v = videoRef.value
+  if (!v) return
+  videoObserver = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        videoVisible.value = e.isIntersecting
+        const el = e.target
+        if (e.isIntersecting) {
+          // Autoplay muted so the browser allows it; ignore rejection.
+          el.muted = videoMuted.value
+          el.play().catch(() => {})
+        } else {
+          el.pause()
+        }
+      }
+    },
+    { threshold: 0.5 } // 50% visible triggers play
+  )
+  videoObserver.observe(v)
+}
+
 onUnmounted(() => {
   if (sectionObserver) {
     sectionObserver.disconnect()
     sectionObserver = null
+  }
+  if (videoObserver) {
+    videoObserver.disconnect()
+    videoObserver = null
   }
 })
 </script>
@@ -661,8 +732,31 @@ onUnmounted(() => {
   <div v-else-if="product" class="detail">
     <van-nav-bar title="商品详情" left-arrow @click-left="router.back()" fixed placeholder />
     <!-- Product intro video (商品视频介绍) -->
+    <!-- Feature: 商品视频自动播放 — auto-plays (muted) when scrolled 50% into
+         view, pauses on scroll-away, with a tap-to-unmute overlay and a
+         play/pause toggle. The whole block is skipped when there's no video. -->
     <div v-if="product.video_url" class="product-video">
-      <video :src="product.video_url" controls preload="metadata" class="pv-player" poster=""></video>
+      <video
+        ref="videoRef"
+        :src="product.video_url"
+        preload="metadata"
+        class="pv-player"
+        playsinline
+        webkit-playsinline
+        :muted="videoMuted"
+        poster=""
+        @play="onVideoPlay"
+        @pause="onVideoPause"
+        @ended="onVideoEnded"
+      ></video>
+      <!-- Tap-to-unmute overlay: shown while the video is muted. -->
+      <div v-if="videoMuted" class="pv-unmute" @click.stop="unmuteVideo">
+        🔇 点击取消静音
+      </div>
+      <!-- Manual play/pause toggle button -->
+      <div class="pv-toggle" @click.stop="toggleVideoPlay">
+        <van-icon :name="videoPlaying ? 'pause' : 'play'" />
+      </div>
     </div>
     <!-- Image gallery carousel: uses the multi-image field, falls back to the main image -->
     <van-swipe class="gallery" :autoplay="3000" indicator-color="#e1251b" v-if="gallery.length > 1">
@@ -1083,8 +1177,43 @@ onUnmounted(() => {
 <style scoped>
 .detail { padding-bottom: 60px; }
 .loading { text-align: center; padding: 80px; }
-.product-video { background: #000; width: 100%; }
+.product-video { background: #000; width: 100%; position: relative; }
 .pv-player { width: 100%; max-height: 280px; object-fit: contain; display: block; }
+/* Feature: 商品视频自动播放 — unmute overlay + play/pause toggle */
+.pv-unmute {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  pointer-events: auto;
+  z-index: 2;
+  transition: background 0.2s ease;
+}
+.pv-unmute:active { background: rgba(225, 37, 27, 0.8); }
+.pv-toggle {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  z-index: 2;
+}
+.pv-toggle:active { background: rgba(225, 37, 27, 0.8); }
 .price-block { padding: 12px 16px; background: #fff; }
 .vip-price { margin-left: 12px; color: #333; font-size: 13px; background: linear-gradient(90deg, #ffd700, #ffaa00); padding: 2px 10px; border-radius: 12px; }
 .qa-section { background: #fff; margin-top: 8px; padding: 12px 16px; }
