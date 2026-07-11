@@ -312,6 +312,35 @@ async function loadTiers() {
   }
 }
 
+// ---- Feature: 购物车重量估算 (Cart Weight Calculator) ----
+// Generates a deterministic per-product shipping weight from a hash of the
+// product id (range 0.1–5.0 kg), so the same product always reports the same
+// weight. The selected-items total weight then drives a small label in the
+// submit-bar area, with a "大件商品" warning above 10 kg.
+function hashStr(str) {
+  let h = 0
+  for (let i = 0; i < str.length; i++) {
+    h = (h << 5) - h + str.charCodeAt(i)
+    h |= 0
+  }
+  return Math.abs(h)
+}
+// Deterministic per-product weight in kg within [0.1, 5.0].
+function productWeight(it) {
+  const h = hashStr(String(it.product_id))
+  // Map the hash onto the 0.1–5.0 range (step 0.1).
+  const steps = 50 // (5.0 - 0.1) / 0.1
+  return 0.1 + (h % steps) * 0.1
+}
+// Sum of weight × quantity for the currently-selected cart items (kg).
+const selectedWeight = computed(() =>
+  items.value
+    .filter((i) => i.selected === 1)
+    .reduce((sum, i) => sum + productWeight(i) * Number(i.quantity || 1), 0)
+)
+// Whether the shipment is heavy enough to flag extra shipping fees.
+const isHeavyShipment = computed(() => selectedWeight.value > 10)
+
 // ---- Shake to Undo (摇一摇撤销) ----
 // Detects a phone shake via DeviceMotionEvent. When a shake above the
 // threshold is registered, prompt the user to re-fetch the cart (restoring
@@ -515,6 +544,11 @@ onUnmounted(() => {
         <van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox>
         <span class="invert-btn" @click="invertSelection">反选</span>
         <span class="selected-count">已选{{ selectedCount }}件</span>
+        <!-- Feature: 购物车重量估算 — small gray label in the submit bar area -->
+        <div class="ship-weight">
+          <span>📦 预估重量: {{ selectedWeight.toFixed(1) }}kg</span>
+          <span v-if="isHeavyShipment" class="ship-weight-warn">大件商品，可能需额外运费</span>
+        </div>
       </van-submit-bar>
     </div>
 
@@ -689,6 +723,32 @@ onUnmounted(() => {
 /* 反选 button + 已选N件 count inside the submit bar */
 .invert-btn { margin-left: 10px; padding: 3px 10px; font-size: 12px; color: #e1251b; border: 1px solid #e1251b; border-radius: 12px; cursor: pointer; white-space: nowrap; }
 .selected-count { margin-left: 10px; font-size: 12px; color: #999; white-space: nowrap; }
+
+/* Feature: 购物车重量估算 (Cart Weight Calculator) */
+/* Small gray label fixed just above the submit bar so it doesn't push the
+   existing row content around. Sits above the bar contents, not inside the
+   inline action row, to avoid interfering with the existing layout. */
+.ship-weight {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 100%;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #999;
+  pointer-events: none;
+}
+.ship-weight-warn {
+  color: #ff7a18;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 10px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
 
 /* Group buy invite (好友拼单邀请) */
 .invite-row {

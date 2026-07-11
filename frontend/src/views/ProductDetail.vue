@@ -83,6 +83,50 @@ const gallery = computed(() => {
   if (imgs.length) return imgs
   return product.value.image ? [product.value.image] : []
 })
+// ---- Feature: 商品3D展示 (Product Detail 3D Rotate Placeholder) ----
+// A simulated 360° product view toggle on the image gallery. When enabled, the
+// main image switches to a "rotating" mode that auto-cycles through up to 4
+// product images inside a CSS perspective container with a rotateY animation.
+// If the product only has a single image (no `images` field), a toast is shown
+// instead and rotation is not entered.
+const rotateMode = ref(false) // whether 360° rotation mode is active
+const rotateIndex = ref(0)    // index of the currently-shown rotation frame
+let rotateTimer = null        // setInterval handle driving the auto-cycle
+// The four frames used for the rotation. We take the first 4 gallery images and
+// pad by cycling through whatever images are available so there are always 4
+// frames (per the spec "Show 4 product images cycling"). If the gallery only
+// has the single main-image fallback, rotation is never entered.
+const rotateFrames = computed(() => {
+  const imgs = gallery.value
+  if (!imgs.length) return []
+  const out = []
+  for (let i = 0; i < 4; i++) out.push(imgs[i % imgs.length])
+  return out
+})
+// Start 360° rotation mode. If the product has no extra images (gallery is just
+// the single main-image fallback), bail out with a toast per the spec.
+function startRotateMode() {
+  // Single-image products (no real `images` field) can't show a 360° view.
+  if (gallery.value.length <= 1) {
+    showToast('该商品暂无360°视图')
+    return
+  }
+  rotateMode.value = true
+  rotateIndex.value = 0
+  // Auto-cycle every 1.5s through the frames array.
+  if (rotateTimer) clearInterval(rotateTimer)
+  rotateTimer = setInterval(() => {
+    rotateIndex.value = (rotateIndex.value + 1) % rotateFrames.value.length
+  }, 1500)
+}
+// Stop the rotation and return to the normal gallery view.
+function stopRotateMode() {
+  rotateMode.value = false
+  if (rotateTimer) {
+    clearInterval(rotateTimer)
+    rotateTimer = null
+  }
+}
 // Review summary stats (评价概览统计): computed from the loaded reviews ref.
 // Computes total count, average rating (1 decimal), good rate (4-5 star share),
 // and the per-star distribution used to render the horizontal bars.
@@ -724,6 +768,11 @@ onUnmounted(() => {
     videoObserver.disconnect()
     videoObserver = null
   }
+  // Feature: 商品3D展示 — clear the rotation auto-cycle timer on unmount.
+  if (rotateTimer) {
+    clearInterval(rotateTimer)
+    rotateTimer = null
+  }
 })
 </script>
 
@@ -759,12 +808,34 @@ onUnmounted(() => {
       </div>
     </div>
     <!-- Image gallery carousel: uses the multi-image field, falls back to the main image -->
-    <van-swipe class="gallery" :autoplay="3000" indicator-color="#e1251b" v-if="gallery.length > 1">
-      <van-swipe-item v-for="(img, i) in gallery" :key="i">
-        <van-image width="100%" height="375" :src="img" fit="cover" />
-      </van-swipe-item>
-    </van-swipe>
-    <van-image v-else width="100%" height="375" :src="product.image" fit="cover" />
+    <!-- Feature: 商品3D展示 — a 360° button on the gallery switches the main image
+         into a rotating mode that auto-cycles 4 product images inside a CSS
+         perspective container. Products with only a single image show a toast. -->
+    <div class="gallery-wrap">
+      <!-- Rotating mode: 4 frames cycling with a rotateY animation -->
+      <div v-if="rotateMode" class="rotate-stage">
+        <div class="rotate-scene">
+          <img
+            :key="rotateIndex"
+            class="rotate-frame"
+            :src="rotateFrames[rotateIndex]"
+            alt="360°"
+          />
+        </div>
+        <div class="rotate-badge">🔄 360° 旋转中…</div>
+        <div class="rotate-stop" @click="stopRotateMode">停止旋转</div>
+      </div>
+      <!-- Normal gallery swipe (multi-image) -->
+      <van-swipe v-else-if="gallery.length > 1" class="gallery" :autoplay="3000" indicator-color="#e1251b">
+        <van-swipe-item v-for="(img, i) in gallery" :key="i">
+          <van-image width="100%" height="375" :src="img" fit="cover" />
+        </van-swipe-item>
+      </van-swipe>
+      <!-- Single image fallback -->
+      <van-image v-else width="100%" height="375" :src="product.image" fit="cover" />
+      <!-- 360° toggle button (hidden while rotating) -->
+      <button v-if="!rotateMode" class="rotate-360-btn" @click="startRotateMode">🔄 360°</button>
+    </div>
     <div class="price-block">
       <span class="big-price">¥{{ fmt(currentPrice()) }}</span>
       <span class="origin">¥{{ fmt(product.original_price) }}</span>
@@ -1504,4 +1575,86 @@ onUnmounted(() => {
 .rs-card { flex-shrink: 0; width: 110px; }
 .rs-name { font-size: 12px; color: #333; line-height: 16px; margin-top: 4px; height: 32px; }
 .rs-price { color: #e1251b; font-size: 14px; font-weight: bold; }
+
+/* Feature: 商品3D展示 (Product Detail 3D Rotate Placeholder) */
+.gallery-wrap { position: relative; background: #fff; }
+.rotate-360-btn {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: none;
+  border-radius: 18px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.2s ease;
+}
+.rotate-360-btn:active { background: rgba(225, 37, 27, 0.85); }
+.rotate-stage {
+  position: relative;
+  width: 100%;
+  height: 375px;
+  background: radial-gradient(circle at 50% 45%, #fafafa, #ececec);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+/* The perspective container gives the rotating frame a subtle 3D depth. */
+.rotate-scene {
+  width: 220px;
+  height: 220px;
+  perspective: 800px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rotate-frame {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  animation: rotate-y-spin 1.5s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+@keyframes rotate-y-spin {
+  0% { transform: rotateY(0deg); }
+  50% { transform: rotateY(180deg); }
+  100% { transform: rotateY(360deg); }
+}
+.rotate-badge {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(225, 37, 27, 0.9);
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 14px;
+  border-radius: 14px;
+  white-space: nowrap;
+}
+.rotate-stop {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.92);
+  color: #e1251b;
+  border: 1px solid #e1251b;
+  border-radius: 16px;
+  padding: 6px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rotate-stop:active { background: #e1251b; color: #fff; }
 </style>

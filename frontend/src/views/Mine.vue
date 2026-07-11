@@ -38,6 +38,22 @@ const cartCount = ref(0)
 const loggedIn = ref(false)
 const growthPoints = ref(0) // growth value derived from check-in points
 
+// ---- Feature: 个人碳足迹 (Mine Carbon Footprint) ----
+// Drives a fun green-themed card. Inputs are the check-in streak (days) and the
+// count of completed orders, fetched alongside the quick stats.
+const checkInStreak = ref(0)
+const completedOrders = ref(0)
+// CO2 saving from online shopping: avg 2.3 kg CO2 saved per completed order.
+const CO2_PER_ORDER = 2.3
+// Each tree absorbs ~20 kg CO2, used to convert savings into "equivalent trees".
+const KG_CO2_PER_TREE = 20
+// Green points: check-in streak × 10 + completed orders × 5.
+const greenPoints = computed(() => checkInStreak.value * 10 + completedOrders.value * 5)
+// Total CO2 saving in kg from completed orders.
+const co2Saved = computed(() => Number((completedOrders.value * CO2_PER_ORDER).toFixed(1)))
+// Equivalent trees planted, 1 decimal.
+const treesEquivalent = computed(() => Number((co2Saved.value / KG_CO2_PER_TREE).toFixed(1)))
+
 // ---- Quick stats dashboard (个人中心速览) ----
 // Counts shown at the top of the Mine page: orders, favorites, coupons, points.
 const stats = ref({ orders: 0, favorites: 0, coupons: 0, points: 0 })
@@ -120,7 +136,8 @@ async function load() {
 }
 
 // Fetch the four quick-stat counts. Failures leave the stat at 0 rather than
-// breaking the page.
+// breaking the page. Also captures the carbon-footprint inputs (check-in streak
+// and completed-order count).
 async function loadStats() {
   try {
     const [orders, favs, mine, ci] = await Promise.all([
@@ -129,13 +146,19 @@ async function loadStats() {
       getMyCoupons().catch(() => []),
       getCheckInStatus().catch(() => ({})),
     ])
+    const orderList = orders || []
     stats.value = {
-      orders: (orders || []).length,
+      orders: orderList.length,
       favorites: (favs || []).length,
       // "Unused" coupon count = coupons not yet redeemed/expired.
       coupons: (mine || []).filter((c) => c && !c.used).length,
       points: ci.total_points || 0,
     }
+    // Carbon-footprint inputs: check-in streak + completed orders.
+    checkInStreak.value = (ci.last && Number(ci.last.streak)) || 0
+    completedOrders.value = orderList.filter(
+      (o) => o && o.status === 'completed'
+    ).length
   } catch (_) {
     // keep zeros
   }
@@ -242,6 +265,25 @@ function logout() {
           <div class="lc-min">{{ lv.min }}+</div>
         </div>
       </div>
+    </div>
+
+    <!-- Feature: 个人碳足迹 (Mine Carbon Footprint) — earth-green themed card
+         with a tree emoji animation. Shows green points, CO2 savings derived
+         from completed orders, and the equivalent trees planted. -->
+    <div class="carbon-card">
+      <div class="carbon-head">
+        <span class="carbon-title">🌱 碳足迹</span>
+        <span class="carbon-points">绿色积分 {{ greenPoints }}</span>
+      </div>
+      <div class="carbon-trees">
+        <span class="carbon-tree t1">🌳</span>
+        <span class="carbon-tree t2">🌲</span>
+        <span class="carbon-tree t3">🌴</span>
+      </div>
+      <div class="carbon-main">
+        您的绿色消费已减少 <b>{{ co2Saved }}</b> kg碳排放
+      </div>
+      <div class="carbon-sub">相当于种了 <b>{{ treesEquivalent }}</b> 棵树</div>
     </div>
 
     <!-- Order entries -->
@@ -449,5 +491,77 @@ function logout() {
   border-radius: 50%;
   background: #e1251b;
   vertical-align: middle;
+}
+
+/* ---- Feature: 个人碳足迹 (Mine Carbon Footprint) ---- */
+/* Fun earth-green themed card with a tree emoji animation. */
+.carbon-card {
+  margin: -8px 16px 12px;
+  background: linear-gradient(135deg, #e8f5e9 0%, #d0eee2 50%, #f0fff4 100%);
+  border: 1px solid #b7eb8f;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(7, 193, 96, 0.12);
+  position: relative;
+  overflow: hidden;
+}
+.carbon-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.carbon-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #1b5e20;
+}
+.carbon-points {
+  font-size: 12px;
+  color: #fff;
+  background: #07c160;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.carbon-trees {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 4px 0 10px;
+}
+.carbon-tree {
+  font-size: 26px;
+  display: inline-block;
+  transform-origin: bottom center;
+}
+.carbon-tree.t1 { animation: carbon-sway 2.4s ease-in-out infinite; }
+.carbon-tree.t2 { animation: carbon-sway 2.4s ease-in-out infinite 0.4s; }
+.carbon-tree.t3 { animation: carbon-sway 2.4s ease-in-out infinite 0.8s; }
+@keyframes carbon-sway {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
+}
+.carbon-main {
+  font-size: 14px;
+  color: #2e7d32;
+  line-height: 22px;
+  text-align: center;
+}
+.carbon-main b {
+  color: #07c160;
+  font-size: 18px;
+  font-weight: bold;
+}
+.carbon-sub {
+  font-size: 13px;
+  color: #388e3c;
+  text-align: center;
+  margin-top: 4px;
+}
+.carbon-sub b {
+  color: #07c160;
+  font-size: 16px;
+  font-weight: bold;
 }
 </style>

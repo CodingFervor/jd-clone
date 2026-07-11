@@ -1,7 +1,7 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { showToast, showSuccessToast, showDialog } from 'vant'
-import { getProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, getCategories, uploadImage } from '../api'
+import { getProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, getCategories, uploadImage, getOrders } from '../api'
 
 const uploadingImg = ref(false)
 async function onUploadMainImage(item) {
@@ -20,6 +20,7 @@ async function onUploadMainImage(item) {
 
 const products = ref([])
 const categories = ref([])
+const orders = ref([])
 const loading = ref(true)
 const showForm = ref(false)
 const editingId = ref(null)
@@ -29,9 +30,55 @@ function emptyForm() {
   return { name: '', subtitle: '', price: 0, original_price: 0, image: '', category: '', category_id: 0, shop: '', stock: 999, sales: 0, description: '', tags: '', is_seckill: 0 }
 }
 
+// ---- Feature: 管理后台增强 (Admin Dashboard Enhancement) ----
+// Stats overview derived from the loaded products + orders.
+// Total revenue + avg order value exclude cancelled orders (no real revenue).
+const totalProducts = computed(() => products.value.length)
+const totalOrders = computed(() => orders.value.length)
+const revenueOrders = computed(() =>
+  orders.value.filter((o) => o && o.status !== 'cancelled')
+)
+const totalRevenue = computed(() =>
+  revenueOrders.value.reduce((s, o) => s + Number(o.total || 0), 0)
+)
+const avgOrderValue = computed(() => {
+  const n = revenueOrders.value.length
+  if (!n) return 0
+  return totalRevenue.value / n
+})
+// Latest 5 orders (newest first by created_at, then id as a fallback).
+const recentOrders = computed(() => {
+  const list = [...orders.value]
+  list.sort((a, b) => {
+    const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+    const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+    if (tb !== ta) return tb - ta
+    return Number(b.id || 0) - Number(a.id || 0)
+  })
+  return list.slice(0, 5)
+})
+// Top-5 best sellers by sales count (descending).
+const topProducts = computed(() => {
+  return [...products.value]
+    .sort((a, b) => Number(b.sales || 0) - Number(a.sales || 0))
+    .slice(0, 5)
+})
+// Human-readable order status label + badge color.
+function statusBadge(s) {
+  return {
+    pending: { text: '待付款', color: '#ff976a', bg: '#fff7e6' },
+    paid: { text: '已付款', color: '#1989fa', bg: '#e8f3ff' },
+    shipped: { text: '已发货', color: '#07c160', bg: '#e8faf0' },
+    completed: { text: '已完成', color: '#07c160', bg: '#e8faf0' },
+    cancelled: { text: '已取消', color: '#999', bg: '#f5f5f5' },
+  }[s] || { text: s || '未知', color: '#999', bg: '#f5f5f5' }
+}
+
 onMounted(async () => {
   await loadProducts()
   try { categories.value = await getCategories() } catch (e) {}
+  // Feature: 管理后台增强 — load orders for the stats overview.
+  try { orders.value = (await getOrders()) || [] } catch (e) { orders.value = [] }
 })
 
 async function loadProducts() {
@@ -85,6 +132,21 @@ async function remove(p) {
   }
 }
 function fmt(n) { return Number(n).toFixed(2) }
+
+// Parse an order's items_json into a readable "商品A x2, 商品B x1" summary.
+function orderItemsSummary(o) {
+  let items = []
+  try {
+    const parsed = typeof o.items_json === 'string' ? JSON.parse(o.items_json) : o.items_json
+    if (Array.isArray(parsed)) items = parsed
+  } catch (_) {
+    items = []
+  }
+  if (!items.length) return '—'
+  return items
+    .map((it) => `${it.name || it.product_name || '商品'} x${it.quantity || 1}`)
+    .join(', ')
+}
 </script>
 
 <template>
@@ -98,25 +160,87 @@ function fmt(n) { return Number(n).toFixed(2) }
     <van-empty v-else-if="!products.length" description="暂无商品">
       <van-button type="danger" round @click="openCreate">添加商品</van-button>
     </van-empty>
-    <van-cell-group v-else inset>
-      <van-swipe-cell v-for="p in products" :key="p.id">
-        <van-cell @click="openEdit(p)">
-          <template #title>
-            <div class="acell">
-              <van-image width="50" height="50" radius="4" :src="p.image" fit="cover" />
-              <div class="ac-info">
-                <div class="van-ellipsis">{{ p.name }}</div>
-                <div class="ac-price">¥{{ fmt(p.price) }} <small>库存{{ p.stock }}</small></div>
+    <div v-else>
+      <!-- Feature: 管理后台增强 — stats overview cards -->
+      <div class="stat-cards">
+        <div class="stat-card sc-blue">
+          <div class="sc-label">商品总数</div>
+          <div class="sc-value">{{ totalProducts }}</div>
+        </div>
+        <div class="stat-card sc-orange">
+          <div class="sc-label">订单总数</div>
+          <div class="sc-value">{{ totalOrders }}</div>
+        </div>
+        <div class="stat-card sc-red">
+          <div class="sc-label">总营业额</div>
+          <div class="sc-value">¥{{ fmt(totalRevenue) }}</div>
+        </div>
+        <div class="stat-card sc-green">
+          <div class="sc-label">客单价</div>
+          <div class="sc-value">¥{{ fmt(avgOrderValue) }}</div>
+        </div>
+      </div>
+
+      <!-- Feature: 管理后台增强 — latest 5 orders with status badges -->
+      <div class="dashboard-section">
+        <div class="ds-title">最近订单</div>
+        <div v-if="!recentOrders.length" class="ds-empty">暂无订单</div>
+        <div v-for="o in recentOrders" :key="o.id" class="recent-order">
+          <div class="ro-top">
+            <span class="ro-no">{{ o.order_no || ('#' + o.id) }}</span>
+            <span
+              class="ro-status"
+              :style="{ color: statusBadge(o.status).color, background: statusBadge(o.status).bg }"
+            >{{ statusBadge(o.status).text }}</span>
+          </div>
+          <div class="ro-items van-ellipsis">{{ orderItemsSummary(o) }}</div>
+          <div class="ro-bottom">
+            <span class="ro-time">{{ o.created_at ? String(o.created_at).slice(0, 16).replace('T', ' ') : '' }}</span>
+            <span class="ro-total">¥{{ fmt(o.total) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature: 管理后台增强 — top 5 best sellers -->
+      <div class="dashboard-section">
+        <div class="ds-title">热销商品TOP5</div>
+        <div v-if="!topProducts.length" class="ds-empty">暂无商品</div>
+        <div
+          v-for="(p, idx) in topProducts"
+          :key="p.id"
+          class="top-product"
+          @click="openEdit(p)"
+        >
+          <span class="tp-rank" :class="{ 'rank-top': idx < 3 }">{{ idx + 1 }}</span>
+          <van-image width="40" height="40" radius="4" :src="p.image" fit="cover" />
+          <div class="tp-info">
+            <div class="van-ellipsis">{{ p.name }}</div>
+            <div class="tp-sub">销量 {{ p.sales || 0 }} · 库存 {{ p.stock || 0 }}</div>
+          </div>
+          <span class="tp-price">¥{{ fmt(p.price) }}</span>
+        </div>
+      </div>
+
+      <van-cell-group inset>
+        <van-swipe-cell v-for="p in products" :key="p.id">
+          <van-cell @click="openEdit(p)">
+            <template #title>
+              <div class="acell">
+                <van-image width="50" height="50" radius="4" :src="p.image" fit="cover" />
+                <div class="ac-info">
+                  <div class="van-ellipsis">{{ p.name }}</div>
+                  <div class="ac-price">¥{{ fmt(p.price) }} <small>库存{{ p.stock }}</small></div>
+                </div>
               </div>
-            </div>
-          </template>
-          <template #right>
-            <van-button square type="primary" text="编辑" @click="openEdit(p)" />
-            <van-button square type="danger" text="删除" @click="remove(p)" />
-          </template>
-        </van-cell>
-      </van-swipe-cell>
-    </van-cell-group>
+            </template>
+            <template #right>
+              <van-button square type="primary" text="编辑" @click="openEdit(p)" />
+              <van-button square type="danger" text="删除" @click="remove(p)" />
+            </template>
+          </van-cell>
+        </van-swipe-cell>
+      </van-cell-group>
+    </div>
 
     <!-- Create/edit popup -->
     <van-popup v-model:show="showForm" position="bottom" round :style="{ height: '80%' }" closeable>
@@ -162,4 +286,107 @@ function fmt(n) { return Number(n).toFixed(2) }
 .ac-price small { color: #999; font-weight: normal; }
 .form { padding: 16px 0; }
 .form h3 { text-align: center; padding: 12px; }
+
+/* Feature: 管理后台增强 — stats overview cards */
+.stat-cards {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  overflow-x: auto;
+}
+.stat-cards::-webkit-scrollbar { display: none; }
+.stat-card {
+  flex: 1 0 0;
+  min-width: 76px;
+  border-radius: 10px;
+  padding: 12px 8px;
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.sc-label { font-size: 11px; opacity: 0.92; }
+.sc-value {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 6px;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+}
+.sc-blue   { background: linear-gradient(135deg, #4facfe, #00c6fb); }
+.sc-orange { background: linear-gradient(135deg, #ffb74d, #ff9800); }
+.sc-red    { background: linear-gradient(135deg, #ff5858, #e1251b); }
+.sc-green  { background: linear-gradient(135deg, #43e97b, #07c160); }
+
+/* Dashboard sections: recent orders + top sellers */
+.dashboard-section {
+  margin: 0 12px 12px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.ds-title {
+  font-size: 15px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 10px;
+}
+.ds-empty { font-size: 13px; color: #999; padding: 8px 0; }
+.recent-order {
+  padding: 10px 0;
+  border-top: 1px solid #f5f5f5;
+}
+.recent-order:first-of-type { border-top: none; }
+.ro-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ro-no { font-size: 13px; color: #333; font-weight: 600; }
+.ro-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.ro-items { font-size: 12px; color: #666; margin-top: 4px; }
+.ro-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+.ro-time { font-size: 11px; color: #aaa; }
+.ro-total { font-size: 14px; color: #e1251b; font-weight: 600; }
+
+.top-product {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid #f5f5f5;
+  cursor: pointer;
+}
+.top-product:first-of-type { border-top: none; }
+.top-product:active { background: #fafafa; }
+.tp-rank {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f0f0f0;
+  color: #999;
+  font-size: 12px;
+  font-weight: bold;
+}
+.tp-rank.rank-top {
+  background: linear-gradient(135deg, #ff9800, #e1251b);
+  color: #fff;
+}
+.tp-info { flex: 1; min-width: 0; font-size: 13px; color: #333; }
+.tp-sub { font-size: 11px; color: #999; margin-top: 2px; }
+.tp-price { color: #e1251b; font-size: 14px; font-weight: 600; flex-shrink: 0; }
 </style>
