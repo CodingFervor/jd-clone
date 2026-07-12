@@ -72,8 +72,12 @@ const cloudTags = computed(() => {
 })
 
 // ---- Voice search (语音搜索) ----
-// Uses the Web Speech API when available. While listening the mic icon pulses.
+// Uses the Web Speech API when available. While listening the mic icon is
+// replaced by an animated 5-bar sound wave (见 voice-wave 样式).
 const listening = ref(false)
+// Five bars make up the sound-wave animation; each gets its own delay so they
+// ripple like a real audio meter.
+const voiceBars = [0, 1, 2, 3, 4]
 let recognition = null
 
 function isSpeechSupported() {
@@ -260,7 +264,19 @@ function fmt(n) {
             :class="{ pulsing: listening }"
             @mousedown.prevent="startVoice"
             title="语音搜索"
-          >🎤</span>
+          >
+            <!-- Feature: 语音搜索波形动画 (Voice Search Sound Wave) — while
+                 listening, replace the mic icon with an animated 5-bar sound wave. -->
+            <span v-if="!listening" class="voice-mic">🎤</span>
+            <span v-else class="voice-wave" aria-label="正在聆听">
+              <span
+                v-for="b in voiceBars"
+                :key="b"
+                class="voice-wave-bar"
+                :style="{ animationDelay: (b * 0.12) + 's' }"
+              ></span>
+            </span>
+          </span>
         </template>
         <template #action>
           <span @click="doSearch(keyword)">搜索</span>
@@ -378,14 +394,36 @@ function fmt(n) {
   transition: transform 0.15s ease;
 }
 .voice-btn:active { transform: scale(1.2); }
-/* Pulsing animation while listening. */
+/* Pulsing animation while listening (kept for the mic emoji). */
 .voice-btn.pulsing {
   color: #e1251b;
-  animation: voice-pulse 1s ease-in-out infinite;
 }
 @keyframes voice-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.4); opacity: 0.6; }
+}
+/* Feature: 语音搜索波形动画 (Voice Search Sound Wave) — 5 vertical bars whose
+   heights animate to mimic a live audio meter while listening. */
+.voice-mic { display: inline-block; }
+.voice-wave {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 18px;
+  width: 22px;
+}
+.voice-wave-bar {
+  display: inline-block;
+  width: 3px;
+  height: 6px;
+  background: #e1251b;
+  border-radius: 2px;
+  animation: voice-bar-bounce 0.8s ease-in-out infinite;
+}
+@keyframes voice-bar-bounce {
+  0%, 100% { height: 4px; }
+  50% { height: 18px; }
 }
 .suggest-list { background: #fff; border-top: 1px solid #eee; }
 .suggest-item {

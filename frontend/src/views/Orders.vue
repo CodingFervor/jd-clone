@@ -519,6 +519,23 @@ async function downloadInvoice(o) {
             </div>
           </div>
         </div>
+        <!-- Feature: 订单时间轴迷你图 (Order Timeline Mini Map) — a tiny 4-step
+             horizontal progress bar (下单→付款→发货→收货) with the current step
+             highlighted. Shown on every order card; cancelled orders freeze at 0. -->
+        <div class="o-mini-timeline">
+          <div
+            v-for="(st, si) in orderStages(o)"
+            :key="'mt-' + si"
+            class="mt-step"
+            :class="{ 'is-done': st.done, 'is-current': st.isCurrent }"
+          >
+            <div class="mt-node">
+              <span class="mt-node-circle">{{ st.done ? '✓' : (si + 1) }}</span>
+              <span v-if="si < orderStages(o).length - 1" class="mt-node-line"></span>
+            </div>
+            <span class="mt-label">{{ ['下单','付款','发货','收货'][si] }}</span>
+          </div>
+        </div>
         <div class="o-foot">
           <span>共 {{ parseItems(o.items_json).length }} 件 合计: <b class="price">¥{{ fmt(o.total) }}</b></span>
           <div class="o-actions">
@@ -643,6 +660,80 @@ async function downloadInvoice(o) {
 .oi-info { flex: 1; }
 .oi-name { font-size: 13px; }
 .oi-price { color: #999; font-size: 12px; margin-top: 4px; }
+/* Feature: 订单时间轴迷你图 (Order Timeline Mini Map) — compact 4-step bar */
+.o-mini-timeline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 10px 4px 6px;
+  margin-top: 8px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+.mt-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  min-width: 0;
+}
+.mt-node {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  justify-content: center;
+  position: relative;
+  height: 18px;
+}
+.mt-node-circle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e0e0e0;
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  z-index: 1;
+  transition: background 0.25s ease, transform 0.25s ease;
+}
+.mt-node-line {
+  position: absolute;
+  left: 50%;
+  width: 100%;
+  top: 50%;
+  height: 2px;
+  background: #e0e0e0;
+  transform: translateY(-50%);
+  z-index: 0;
+}
+.mt-label {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #999;
+  white-space: nowrap;
+}
+/* Done steps: red node + red connector line. */
+.mt-step.is-done .mt-node-circle {
+  background: #e1251b;
+}
+.mt-step.is-done .mt-node-line {
+  background: #e1251b;
+}
+/* Current step: enlarged red node with a subtle ring. */
+.mt-step.is-current .mt-node-circle {
+  background: #e1251b;
+  transform: scale(1.18);
+  box-shadow: 0 0 0 3px rgba(225, 37, 27, 0.18);
+}
+.mt-step.is-current .mt-label {
+  color: #e1251b;
+  font-weight: 600;
+}
 .o-foot { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #f5f5f5; margin-top: 8px; font-size: 13px; }
 .o-actions { display: flex; gap: 8px; }
 /* Feature: 评价提醒 (Order Review Reminder) */

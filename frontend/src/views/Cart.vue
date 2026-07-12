@@ -175,17 +175,10 @@ async function removeItem(item) {
 }
 
 // ---- Swipe cell actions (购物车滑动操作) ----
-// Right swipe reveals 收藏 (favorite) + 删除 (delete).
+// Right swipe reveals ⭐收藏 (move to favorites) + 删除 (delete).
 // Left swipe reveals 移至收藏夹 (favorite then remove from cart).
-async function swipeFavorite(it) {
-  try {
-    await toggleFavorite(it.product_id)
-    showSuccessToast('已加入收藏')
-  } catch (e) {
-    showToast(e.response?.data?.error || '收藏失败')
-  }
-}
-// Move to favorites: favorite the product, then delete it from the cart.
+// Move to favorites: favorite the product, then delete it from the cart,
+// and confirm with a "已移至收藏夹" toast.
 async function moveToFavorite(it) {
   try {
     await toggleFavorite(it.product_id)
@@ -556,7 +549,7 @@ onUnmounted(() => {
           </div>
         </div>
         <template #right>
-          <div class="swipe-right-fav" @click="swipeFavorite(it)">收藏</div>
+          <div class="swipe-right-fav" @click="moveToFavorite(it)">⭐收藏</div>
           <div class="swipe-right-del" @click="removeItem(it)">删除</div>
         </template>
       </van-swipe-cell>

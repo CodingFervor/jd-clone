@@ -304,6 +304,40 @@ const originLabel = computed(() => {
   return o ? `${o.province}·${o.city}` : ''
 })
 const showOrigin = ref(false)
+// ---- Feature: 商品标签云 (Product Tag Cloud) ----
+// Aggregates all tags from the related products, counts how often each tag
+// appears, and scales the rendered font size by frequency. Clicking a tag runs
+// a search for it (navigates to /search?q=<tag>). Tags are split on common
+// delimiters (commas, Chinese comma, enumeration comma).
+const tagCloud = computed(() => {
+  const counts = {}
+  for (const rp of relatedProducts.value) {
+    const raw = String(rp.tags || '').trim()
+    if (!raw) continue
+    for (let t of raw.split(/[,，、]/)) {
+      t = t.trim()
+      if (!t) continue
+      counts[t] = (counts[t] || 0) + 1
+    }
+  }
+  const entries = Object.entries(counts)
+  if (!entries.length) return []
+  const max = Math.max(...entries.map((e) => e[1]))
+  const min = Math.min(...entries.map((e) => e[1]))
+  // Scale font size from 13px (least frequent) to 24px (most frequent).
+  const span = Math.max(1, max - min)
+  return entries
+    .map(([text, count]) => ({
+      text,
+      count,
+      size: 13 + Math.round(((count - min) / span) * 11),
+    }))
+    .sort((a, b) => b.count - a.count)
+})
+// Navigate to the search page with the clicked tag as the query.
+function searchTag(tag) {
+  router.push({ path: '/search', query: { q: tag } })
+}
 // Purchase Note Templates (购买须知): three templated notes shown in a
 // collapsible section above the brand story. The start index is rotated by the
 // product id so the same product always shows the notes in the same order,
@@ -1212,6 +1246,20 @@ onUnmounted(() => {
           <div class="rs-price">¥{{ fmt(rp.price) }}</div>
         </div>
       </div>
+      <!-- Feature: 商品标签云 (Product Tag Cloud) — word cloud of all related
+           product tags, sized by frequency. Clicking a tag searches it. -->
+      <div v-if="tagCloud.length" class="tag-cloud">
+        <div class="tc-head">🏷️ 相关标签云</div>
+        <div class="tc-cloud">
+          <span
+            v-for="t in tagCloud"
+            :key="t.text"
+            class="tc-tag"
+            :style="{ fontSize: t.size + 'px' }"
+            @click="searchTag(t.text)"
+          >{{ t.text }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- Bottom action bar -->
@@ -1696,6 +1744,38 @@ onUnmounted(() => {
 .rs-card { flex-shrink: 0; width: 110px; }
 .rs-name { font-size: 12px; color: #333; line-height: 16px; margin-top: 4px; height: 32px; }
 .rs-price { color: #e1251b; font-size: 14px; font-weight: bold; }
+/* Feature: 商品标签云 (Product Tag Cloud) */
+.tag-cloud {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed #eee;
+}
+.tc-head {
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 10px;
+}
+.tc-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  line-height: 1.8;
+}
+.tc-tag {
+  display: inline-block;
+  color: #e1251b;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s ease, transform 0.15s ease;
+  user-select: none;
+}
+.tc-tag:active {
+  background: #fff5f5;
+  transform: scale(1.08);
+}
 
 /* Feature: 商品3D展示 (Product Detail 3D Rotate Placeholder) */
 .gallery-wrap { position: relative; background: #fff; }

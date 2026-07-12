@@ -116,6 +116,44 @@ function fmtMoney(n) {
   return Number(n).toFixed(2)
 }
 
+// ---- Feature: 成就墙 (Mine Achievement Wall) ----
+// Six themed achievement badges. Each is "earned" when the user's stats cross
+// a threshold; earned badges render in color, unearned ones in gray. The
+// thresholds are tuned so a freshly-active user can earn a couple while still
+// having goals to chase.
+const ACHIEVEMENT_DEFS = [
+  { key: 'checkin',  icon: '📅', name: '签到达人', desc: '连续签到7天',     color: '#e1251b' },
+  { key: 'shopper',  icon: '🛒', name: '购物专家', desc: '完成5个订单',     color: '#ff7a18' },
+  { key: 'reviewer', icon: '✍️', name: '评论之星', desc: '发表3条评价',     color: '#07c160' },
+  { key: 'collector',icon: '⭐', name: '收藏家',   desc: '收藏10件商品',    color: '#f5a623' },
+  { key: 'coupon',   icon: '🎟️', name: '优惠券女王', desc: '持有3张优惠券',  color: '#fa2c6e' },
+  { key: 'points',   icon: '💎', name: '积分富豪', desc: '积分满1000',      color: '#9c27b0' },
+]
+// Count of reviewed products, tracked in localStorage by ProductDetail/Orders.
+function reviewedCount() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem('jd_reviewed_products') || '[]')).size
+  } catch {
+    return 0
+  }
+}
+// A reactivity tick so the achievement wall refreshes when stats load.
+const achTick = ref(0)
+const achievements = computed(() => {
+  // Touch the tick so this recomputes when loadStats finishes.
+  void achTick.value
+  const earned = {
+    checkin: checkInStreak.value >= 7,
+    shopper: completedOrders.value >= 5,
+    reviewer: reviewedCount() >= 3,
+    collector: stats.value.favorites >= 10,
+    coupon: stats.value.coupons >= 3,
+    points: stats.value.points >= 1000,
+  }
+  return ACHIEVEMENT_DEFS.map((a) => ({ ...a, earned: !!earned[a.key] }))
+})
+const earnedCount = computed(() => achievements.value.filter((a) => a.earned).length)
+
 // ---- Dark mode (深色模式) ----
 // Mirror of the flag stored in App.vue; initialized from localStorage so the
 // switch reflects the real state on first render.
@@ -215,6 +253,8 @@ async function loadStats() {
     completedOrders.value = orderListRaw.filter(
       (o) => o && o.status === 'completed'
     ).length
+    // Refresh the achievement wall now that the latest stats are in.
+    achTick.value++
   } catch (_) {
     // keep zeros
   }
@@ -372,6 +412,30 @@ function logout() {
             </div>
             <div class="st-month">{{ m.label }}</div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature: 成就墙 (Mine Achievement Wall) — 6 themed badges. Earned
+         badges are colored, unearned ones are grayed out. -->
+    <div class="achieve-card">
+      <div class="achieve-head">
+        <span class="achieve-title">🏆 成就墙</span>
+        <span class="achieve-count">已点亮 {{ earnedCount }}/{{ achievements.length }}</span>
+      </div>
+      <div class="achieve-grid">
+        <div
+          v-for="a in achievements"
+          :key="a.key"
+          class="achieve-badge"
+          :class="{ earned: a.earned }"
+        >
+          <div
+            class="ab-icon"
+            :style="a.earned ? { background: a.color } : null"
+          >{{ a.icon }}</div>
+          <div class="ab-name">{{ a.name }}</div>
+          <div class="ab-desc">{{ a.earned ? '已获得' : a.desc }}</div>
         </div>
       </div>
     </div>
@@ -752,5 +816,83 @@ function logout() {
   font-size: 11px;
   color: #999;
   margin-top: 4px;
+}
+
+/* Feature: 成就墙 (Mine Achievement Wall) */
+.achieve-card {
+  margin: 0 16px 12px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.achieve-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.achieve-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+.achieve-count {
+  font-size: 12px;
+  color: #e1251b;
+  background: #fff5f5;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.achieve-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px 8px;
+}
+.achieve-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  /* Unearned badges are desaturated/grayed out. */
+  opacity: 0.55;
+  filter: grayscale(1);
+  transition: opacity 0.3s ease, filter 0.3s ease, transform 0.2s ease;
+}
+.achieve-badge.earned {
+  opacity: 1;
+  filter: none;
+}
+.achieve-badge:active { transform: scale(0.96); }
+.ab-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  background: #d0d0d0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.achieve-badge.earned .ab-icon {
+  box-shadow: 0 3px 10px rgba(225, 37, 27, 0.28);
+}
+.ab-name {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+}
+.ab-desc {
+  margin-top: 2px;
+  font-size: 10px;
+  color: #999;
+  line-height: 1.4;
+}
+.achieve-badge.earned .ab-desc {
+  color: #07c160;
 }
 </style>

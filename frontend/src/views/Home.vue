@@ -211,6 +211,24 @@ function priceTrendTag(p) {
 // Split countdown into 3 monospace blocks for styling.
 const timeBlocks = computed(() => countdown.value.split(':'))
 
+// ---- Feature: 首页快捷分类 (Home Quick Category Grid) ----
+// A fixed 2-row x 5-column grid of quick-access category shortcuts, each with
+// a gradient circle background + category name. Clicking navigates to
+// /category?id=<id>. The ids reuse the numeric category ids used elsewhere in
+// the app; the gradients are cycled for visual variety.
+const QUICK_CATEGORIES = [
+  { id: 1,  icon: '📱', name: '手机数码', grad: 'linear-gradient(135deg, #e1251b, #ff7a18)' },
+  { id: 2,  icon: '💻', name: '电脑办公', grad: 'linear-gradient(135deg, #1989fa, #36d1dc)' },
+  { id: 3,  icon: '家用电器', name: '家电', grad: 'linear-gradient(135deg, #07c160, #8fd19e)' },
+  { id: 4,  icon: '👗', name: '服饰内衣', grad: 'linear-gradient(135deg, #fa2c6e, #ff6fae)' },
+  { id: 5,  icon: '👟', name: '运动鞋包', grad: 'linear-gradient(135deg, #ff9800, #ffd54f)' },
+  { id: 6,  icon: '💄', name: '美妆护肤', grad: 'linear-gradient(135deg, #9c27b0, #e040fb)' },
+  { id: 7,  icon: '🍼', name: '母婴童装', grad: 'linear-gradient(135deg, #ff5252, #ff8a80)' },
+  { id: 8,  icon: '🍔', name: '食品生鲜', grad: 'linear-gradient(135deg, #4caf50, #a5d6a7)' },
+  { id: 9,  icon: '🛋️', name: '家居家装', grad: 'linear-gradient(135deg, #795548, #bcaaa4)' },
+  { id: 10, icon: '📚', name: '图书文娱', grad: 'linear-gradient(135deg, #3f51b5, #7986cb)' },
+]
+
 // ---- Popular tags feed (热门标签信息流) ----
 // Hardcoded popular discovery tags. Clicking a tag navigates to the search
 // page pre-filled with the tag text, reusing the existing search flow.
@@ -333,6 +351,20 @@ onUnmounted(() => {
       <div class="wc-tip">
         <span class="wc-tip-icon">🛒</span>
         <span class="wc-tip-text">{{ weather.tip }}</span>
+      </div>
+    </div>
+
+    <!-- Feature: 首页快捷分类 (Home Quick Category Grid) — 2x5 grid of gradient
+         circle category shortcuts below the weather widget. -->
+    <div class="quick-cat-grid">
+      <div
+        v-for="c in QUICK_CATEGORIES"
+        :key="c.id"
+        class="qc-item"
+        @click="goCategory(c.id)"
+      >
+        <div class="qc-icon" :style="{ background: c.grad }">{{ c.icon }}</div>
+        <div class="qc-name van-ellipsis">{{ c.name }}</div>
       </div>
     </div>
 
@@ -545,6 +577,42 @@ onUnmounted(() => {
 }
 .wc-tip-icon {
   font-size: 13px;
+}
+/* Feature: 首页快捷分类 (Home Quick Category Grid) — 2x5 gradient circle grid */
+.quick-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(2, auto);
+  gap: 14px 0;
+  padding: 14px 8px;
+  background: #fff;
+  margin: 0 8px 8px;
+  border-radius: 8px;
+}
+.qc-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.qc-item:active { opacity: 0.7; }
+.qc-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.qc-name {
+  font-size: 12px;
+  color: #666;
+  max-width: 60px;
+  text-align: center;
 }
 .cat-grid {
   display: grid;
