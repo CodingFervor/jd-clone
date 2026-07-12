@@ -331,7 +331,29 @@ function fmt(n) {
         <span class="rb-count">共 {{ results.length }} 件相关商品</span>
         <van-button size="mini" plain hairline @click="backToDiscover">返回搜索</van-button>
       </div>
-      <van-empty v-if="!results.length" description="没有找到相关商品" />
+      <!-- Feature: 搜索无结果插画 (Search No Results Illustration) — animated
+           sad emoji + "🔍没有找到相关商品" + suggestion tags, replacing the plain
+           van-empty when the search returns no results. -->
+      <div v-if="!results.length" class="no-result">
+        <div class="nr-emoji" aria-hidden="true">
+          <span class="nr-magnifier">🔍</span>
+          <span class="nr-sad">😢</span>
+        </div>
+        <div class="nr-text">🔍 没有找到相关商品</div>
+        <div class="nr-sub">换个关键词试试吧～</div>
+        <div class="nr-suggest">
+          <div class="nr-suggest-head">为你推荐</div>
+          <div class="nr-suggest-tags">
+            <span
+              v-for="(h, i) in hotSearches.slice(0, 6)"
+              :key="h.text"
+              class="nr-tag"
+              :class="'nr-tag-' + ((i % 4) + 1)"
+              @click="doSearch(h.text)"
+            >{{ h.text }}</span>
+          </div>
+        </div>
+      </div>
       <div class="res-list">
         <div v-for="p in results" :key="p.id" class="res-item" @click="router.push('/product/' + p.id)">
           <van-image width="100" height="100" radius="6" :src="p.image" fit="cover" />
@@ -498,4 +520,89 @@ function fmt(n) {
   0%, 100% { transform: scale(1) rotate(-4deg); opacity: 1; }
   50% { transform: scale(1.25) rotate(4deg); opacity: 0.85; }
 }
+
+/* Feature: 搜索无结果插画 (Search No Results Illustration) */
+.no-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 20px 24px;
+  text-align: center;
+}
+.nr-emoji {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Magnifier gently bobs up and down as if scanning the page. */
+.nr-magnifier {
+  font-size: 64px;
+  line-height: 1;
+  display: inline-block;
+  animation: nr-scan 1.8s ease-in-out infinite;
+  filter: drop-shadow(0 4px 8px rgba(225, 37, 27, 0.18));
+}
+@keyframes nr-scan {
+  0%, 100% { transform: translateY(0) rotate(-12deg); }
+  50% { transform: translateY(-10px) rotate(12deg); }
+}
+/* Sad face fades in behind the magnifier to convey "nothing found". */
+.nr-sad {
+  position: absolute;
+  right: -6px;
+  bottom: -8px;
+  font-size: 36px;
+  line-height: 1;
+  display: inline-block;
+  animation: nr-sad-fade 2.4s ease-in-out infinite;
+}
+@keyframes nr-sad-fade {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.92); }
+}
+.nr-text {
+  margin-top: 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+.nr-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #999;
+}
+.nr-suggest {
+  margin-top: 20px;
+  width: 100%;
+}
+.nr-suggest-head {
+  font-size: 13px;
+  color: #999;
+  margin-bottom: 10px;
+}
+.nr-suggest-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.nr-tag {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s ease;
+}
+.nr-tag:active { transform: scale(0.94); }
+.nr-tag-1 { background: linear-gradient(135deg, #e1251b, #ff4d4f); }
+.nr-tag-2 { background: linear-gradient(135deg, #ff7a18, #ffb84d); }
+.nr-tag-3 { background: linear-gradient(135deg, #1989fa, #36d1dc); }
+.nr-tag-4 { background: linear-gradient(135deg, #07c160, #8fd19e); }
 </style>

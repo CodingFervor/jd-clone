@@ -2,11 +2,27 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showLoadingToast, showDialog } from 'vant'
-import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder, addToCart } from '../api'
+import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder, addToCart, getRefunds } from '../api'
 
 const router = useRouter()
 const orders = ref([])
 const loading = ref(true)
+// ---- Feature: 订单退款状态徽章 (Order Refund Status Icon) ----
+// The Order model itself has no refund_status field, so we fetch the user's
+// refund list (best-effort) and build a map order_id -> refund status. A
+// completed refund renders a green "✓已退款" badge; a pending/approved refund
+// renders an orange "⏳退款中" badge. Rejected/unknown refunds render nothing.
+const refundByOrder = ref({})
+// Returns 'completed' | 'pending' | '' for an order's refund (if any).
+// 'pending' here also covers 'approved' (still being processed/refunded).
+function refundStateFor(o) {
+  const r = refundByOrder.value[o.id]
+  if (!r) return ''
+  if (r === 'completed') return 'completed'
+  // pending (审核中) and approved (已通过, refund being processed) → 退款中.
+  if (r === 'pending' || r === 'approved') return 'pending'
+  return ''
+}
 // Expanded order lifecycle timelines: a Set of order IDs whose timeline is shown.
 // We reassign a new Set on toggle so Vue reliably re-renders.
 const expandedOrders = ref(new Set())
@@ -76,6 +92,17 @@ onMounted(async () => {
     if (orders.value.some((o) => o.status === 'pending')) {
       startTimer()
     }
+    // Best-effort load of the refund list to power the refund-status badges.
+    // A failure (e.g. no refunds yet) just leaves the map empty.
+    try {
+      const refunds = await getRefunds()
+      const map = {}
+      for (const r of refunds || []) {
+        // Keep the most-recent status if there are multiple refunds per order.
+        map[r.order_id] = r.status
+      }
+      refundByOrder.value = map
+    } catch (_) { /* ignore */ }
   } catch (e) {
     showToast('加载失败')
   } finally {
@@ -489,6 +516,12 @@ async function downloadInvoice(o) {
             <span v-if="o.status === 'pending'" class="o-countdown">（{{ countdownText(o) }}）</span>
           </span>
         </div>
+        <!-- Feature: 订单退款状态徽章 (Order Refund Status Icon) — green "✓已退款"
+             for completed refunds, orange "⏳退款中" for pending/approved refunds. -->
+        <div v-if="refundStateFor(o)" class="refund-badge-row">
+          <span v-if="refundStateFor(o) === 'completed'" class="refund-badge refund-done">✓已退款</span>
+          <span v-else class="refund-badge refund-pending">⏳退款中</span>
+        </div>
         <!-- Feature: 评价提醒 — pulsing badge nudging review of unreviewed completed orders -->
         <div v-if="needsReview(o)" :key="'rv-' + o.id + '-' + reviewTick" class="review-reminder">
           <div class="rr-badge">
@@ -650,6 +683,31 @@ async function downloadInvoice(o) {
 .o-head { display: flex; justify-content: space-between; font-size: 12px; color: #999; margin-bottom: 8px; }
 .o-status { color: #e1251b; }
 .o-countdown { color: #e1251b; font-weight: 600; }
+/* Feature: 订单退款状态徽章 (Order Refund Status Icon) */
+.refund-badge-row { margin-bottom: 8px; }
+.refund-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 10px;
+  line-height: 1.6;
+}
+.refund-done {
+  color: #fff;
+  background: #07c160;
+}
+.refund-pending {
+  color: #fff;
+  background: #ff9800;
+  animation: refund-pending-blink 1.4s ease-in-out infinite;
+}
+@keyframes refund-pending-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
 .o-item { display: flex; gap: 10px; padding: 6px 0; }
 .o-packages { display: flex; flex-direction: column; gap: 10px; }
 .o-package { padding: 4px 0; }

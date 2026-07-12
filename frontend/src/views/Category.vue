@@ -78,6 +78,13 @@ const filteredProducts = computed(() => {
   return list
 })
 
+// ---- Feature: 面包屑导航 (Category Page Breadcrumb) ----
+// Resolves the active category's display name for the breadcrumb trail.
+const activeCatName = computed(() => {
+  const c = cats.value.find((x) => x.id === activeId.value)
+  return c ? c.name : '全部'
+})
+
 function goProduct(id) {
   router.push('/product/' + id)
 }
@@ -117,6 +124,15 @@ function onBannerTap() {
     <van-sticky>
       <van-search placeholder="搜索京东商品" shape="round" readonly @click="router.push('/search')" />
     </van-sticky>
+    <!-- Feature: 面包屑导航 (Category Page Breadcrumb) — small path at the top:
+         首页 > 分类 > 当前分类名. Clicking 首页/分类 navigates accordingly. -->
+    <div class="breadcrumb">
+      <span class="bc-item" @click="router.push('/home')">首页</span>
+      <span class="bc-sep">&gt;</span>
+      <span class="bc-item" @click="activeId = (cats[0] ? cats[0].id : activeId)">分类</span>
+      <span class="bc-sep">&gt;</span>
+      <span class="bc-item bc-current">{{ activeCatName }}</span>
+    </div>
     <div class="cat-body">
       <div class="cat-sidebar">
         <div
@@ -232,6 +248,36 @@ function onBannerTap() {
 
 <style scoped>
 .cat-page { display: flex; flex-direction: column; height: 100vh; }
+/* Feature: 面包屑导航 (Category Page Breadcrumb) */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #fff;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 12px;
+  color: #999;
+  flex-shrink: 0;
+}
+.bc-item {
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+.bc-item:active { color: #e1251b; }
+.bc-sep {
+  color: #ccc;
+  font-size: 11px;
+}
+.bc-current {
+  color: #e1251b;
+  font-weight: 600;
+  cursor: default;
+  max-width: 50vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cat-body { display: flex; flex: 1; overflow: hidden; }
 .cat-sidebar { width: 90px; background: #f7f7f7; overflow-y: auto; }
 .cat-side-item { padding: 16px 8px; text-align: center; font-size: 13px; color: #333; position: relative; }

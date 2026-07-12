@@ -210,6 +210,15 @@ function priceTrendTag(p) {
 
 // Split countdown into 3 monospace blocks for styling.
 const timeBlocks = computed(() => countdown.value.split(':'))
+// ---- Feature: 限时秒杀紧迫摇晃 (Home Flash Sale Shake) ----
+// When under 1 minute remains on the flash countdown (00:00:XX), add a subtle
+// shake animation to the banner to amplify urgency. Guarded so it only triggers
+// before the sale goes live (not during the post-live "GO" period).
+const flashUrgent = computed(() => {
+  if (flashLive.value) return false
+  const [h, m] = timeBlocks.value
+  return Number(h) === 0 && Number(m) === 0
+})
 
 // ---- Feature: 首页快捷分类 (Home Quick Category Grid) ----
 // A fixed 2-row x 5-column grid of quick-access category shortcuts, each with
@@ -377,7 +386,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Flash sale countdown banner (首页限时抢购倒计时) -->
-    <div class="flash-banner" :class="{ live: flashLive }">
+    <div class="flash-banner" :class="{ live: flashLive, urgent: flashUrgent }">
       <div class="fb-text">
         <span class="fb-icon">⚡</span>
         <span class="fb-title">限时秒杀</span>
@@ -841,6 +850,19 @@ onUnmounted(() => {
 }
 .flash-banner.live {
   background: linear-gradient(90deg, #ff4d4f 0%, #e1251b 100%);
+}
+/* Feature: 限时秒杀紧迫摇晃 (Home Flash Sale Shake) — subtle shake when under
+   1 minute remains. Low amplitude (3px) so it amplifies urgency without being
+   distracting; pauses briefly every 0.6s for a natural feel. */
+.flash-banner.urgent {
+  animation: flash-shake 0.6s ease-in-out infinite;
+}
+@keyframes flash-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px) rotate(-0.4deg); }
+  40% { transform: translateX(3px) rotate(0.4deg); }
+  60% { transform: translateX(-2px) rotate(-0.3deg); }
+  80% { transform: translateX(2px) rotate(0.3deg); }
 }
 .fb-text {
   display: flex;

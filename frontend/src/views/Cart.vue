@@ -210,8 +210,10 @@ async function checkout() {
     return
   }
   const selected = items.value.filter((i) => i.selected === 1).map((i) => ({ product_id: i.product_id, quantity: i.quantity }))
+  // Fold the chosen delivery-time slot into the order remark.
+  const remark = deliveryRemark()
   try {
-    await createOrder({ items: selected, address: '' })
+    await createOrder({ items: selected, address: '', remark })
     showSuccessToast('下单成功')
     router.push('/orders')
   } catch (e) {
@@ -226,6 +228,39 @@ function fmt(n) {
 // current price (indicating an active discount / price drop).
 function isPriceDrop(it) {
   return Number(it.original_price) > Number(it.price) * 1.1
+}
+
+// ---- Feature: 配送时间选择 (Cart Delivery Time Slots) ----
+// A delivery-time selector with four slots: 不限 / 工作日 / 周末 / 指定日期.
+// The selection is folded into the order remark at checkout so the backend's
+// existing remark column carries it without an API change.
+const DELIVERY_SLOTS = [
+  { key: 'any',     label: '不限' },
+  { key: 'weekday', label: '工作日' },
+  { key: 'weekend', label: '周末' },
+  { key: 'date',    label: '指定日期' },
+]
+const deliverySlot = ref('any')
+// Chosen concrete date for the "指定日期" option (defaults to tomorrow). Stored
+// as YYYY-MM-DD; surfaced in the remark as "指定日期: YYYY-MM-DD".
+const tomorrowStr = (() => {
+  const d = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+})()
+const deliveryDate = ref(tomorrowStr)
+// Min selectable date is today (so users can't pick a past slot).
+const minDate = (() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+})()
+// Build the human-readable remark fragment for the chosen slot. Empty when
+// "不限" so we don't pollute the order note with a no-op.
+function deliveryRemark() {
+  const slot = DELIVERY_SLOTS.find((s) => s.key === deliverySlot.value)
+  if (!slot || slot.key === 'any') return ''
+  if (slot.key === 'date') return `配送时间: 指定日期 ${deliveryDate.value}`
+  return `配送时间: ${slot.label}`
 }
 
 // ---- Smart Quantity Selector (智能数量选择) ----
@@ -529,6 +564,13 @@ onUnmounted(() => {
             <div class="ci-name van-multi-ellipsis--l2">
               <van-tag v-if="isPriceDrop(it)" type="danger" size="mini" class="drop-tag">降价</van-tag>
               {{ it.product_name }}
+              <!-- Feature: 库存紧张提醒 (Cart Item Stock Warning) — when a cart
+                   item's stock falls below 5, show a red blinking "仅剩N件" tag
+                   next to the item name to nudge the user to check out soon. -->
+              <span
+                v-if="Number(it.stock) > 0 && Number(it.stock) < 5"
+                class="ci-stock-warn"
+              >仅剩{{ it.stock }}件</span>
             </div>
             <div class="ci-bottom">
               <span class="price">¥{{ fmt(it.price) }}</span>
@@ -563,6 +605,34 @@ onUnmounted(() => {
         <span v-else-if="nextTier" class="tier-progress">
           再买¥{{ (nextTier.threshold - selectedSum).toFixed(2) }}可享满¥{{ nextTier.threshold }}减¥{{ nextTier.discount }}
         </span>
+      </div>
+
+      <!-- Feature: 配送时间选择 (Cart Delivery Time Slots) — pick a delivery
+           window (不限/工作日/周末/指定日期); the choice is stored in the order
+           remark at checkout. -->
+      <div class="delivery-card">
+        <div class="dc-head">
+          <span class="dc-title"><van-icon name="clock-o" /> 配送时间</span>
+          <span v-if="deliverySlot !== 'any'" class="dc-summary">{{ deliveryRemark().replace('配送时间: ', '') }}</span>
+        </div>
+        <div class="dc-slots">
+          <span
+            v-for="s in DELIVERY_SLOTS"
+            :key="s.key"
+            class="dc-slot"
+            :class="{ active: deliverySlot === s.key }"
+            @click="deliverySlot = s.key"
+          >{{ s.label }}</span>
+        </div>
+        <div v-if="deliverySlot === 'date'" class="dc-date-row">
+          <van-icon name="calendar-o" />
+          <input
+            v-model="deliveryDate"
+            type="date"
+            class="dc-date-input"
+            :min="minDate"
+          />
+        </div>
       </div>
 
       <div class="invite-row">
@@ -656,6 +726,24 @@ onUnmounted(() => {
 .ci-info { flex: 1; }
 .ci-name { font-size: 13px; line-height: 18px; height: 36px; }
 .ci-name .drop-tag { vertical-align: middle; margin-right: 4px; }
+/* Feature: 库存紧张提醒 (Cart Item Stock Warning) — red blinking tag */
+.ci-stock-warn {
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: middle;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: #e1251b;
+  padding: 1px 6px;
+  border-radius: 8px;
+  line-height: 1.5;
+  white-space: nowrap;
+  animation: ci-stock-blink 1s steps(2, start) infinite;
+}
+@keyframes ci-stock-blink {
+  50% { opacity: 0.35; }
+}
 .ci-bottom { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .ci-bottom .price { font-size: 16px; flex: 1; }
 /* Smart Quantity Selector (智能数量选择) */
@@ -726,6 +814,80 @@ onUnmounted(() => {
   border: 1px solid #ffd591;
   border-radius: 8px;
   padding: 8px 12px;
+}
+/* Feature: 配送时间选择 (Cart Delivery Time Slots) */
+.delivery-card {
+  margin: 8px 12px 0;
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+}
+.dc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.dc-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+.dc-summary {
+  font-size: 12px;
+  color: #e1251b;
+  font-weight: 500;
+}
+.dc-slots {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dc-slot {
+  flex: 1;
+  min-width: 64px;
+  text-align: center;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: #333;
+  background: #f7f7f7;
+  border: 1px solid #eee;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+.dc-slot.active {
+  background: #fff5f5;
+  border-color: #e1251b;
+  color: #e1251b;
+  font-weight: 600;
+}
+.dc-date-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: #666;
+  font-size: 13px;
+}
+.dc-date-input {
+  flex: 1;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #333;
+  outline: none;
+  background: #fafafa;
+}
+.dc-date-input:focus {
+  border-color: #e1251b;
+  background: #fff;
 }
 /* 猜你喜欢 recommended products section */
 .rec-section { background: #fff; margin-bottom: 8px; padding: 12px 12px 8px; }

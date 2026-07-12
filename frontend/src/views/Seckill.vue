@@ -133,7 +133,7 @@ function fmt(n) { return Number(n).toFixed(2) }
             <span class="dc-origin">¥{{ fmt(d.original_price) }}</span>
           </div>
           <div class="dc-progress">
-            <div class="dp-bar" :class="{ 'dp-bar--urgent': isLowStock(d) }"><div class="dp-fill" :style="{ width: progress(d) + '%' }"></div></div>
+            <div class="dp-bar" :class="{ 'dp-bar--urgent': isLowStock(d) }"><div class="dp-fill" :style="{ width: progress(d) + '%' }"><span class="dp-shine" aria-hidden="true"></span></div></div>
             <span class="dp-text">已抢{{ progress(d) }}%</span>
           </div>
           <!-- Feature: 限时抢购提醒 — live start countdown badge. Turns red
@@ -194,7 +194,28 @@ function fmt(n) { return Number(n).toFixed(2) }
 .dc-origin { color: #999; font-size: 12px; text-decoration: line-through; }
 .dc-progress { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .dp-bar { flex: 1; height: 12px; background: #ffe0e0; border-radius: 6px; overflow: hidden; }
-.dp-fill { height: 100%; background: linear-gradient(90deg, #ff9800, #e1251b); transition: width 0.3s; }
+.dp-fill { height: 100%; background: linear-gradient(90deg, #ff9800, #e1251b); transition: width 0.3s; position: relative; overflow: hidden; }
+/* Feature: 库存进度条流光 (Seckill Stock Bar Shimmer) — a moving diagonal
+   highlight sweeps across the fill like a loading bar shimmer. */
+.dp-shine {
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: skewX(-20deg);
+  animation: dp-shine-sweep 1.6s linear infinite;
+}
+@keyframes dp-shine-sweep {
+  0% { left: -60%; }
+  100% { left: 100%; }
+}
 .dp-text { font-size: 11px; color: #e1251b; white-space: nowrap; }
 .dc-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
 .dc-countdown { color: #e1251b; font-size: 14px; font-weight: bold; font-variant-numeric: tabular-nums; }

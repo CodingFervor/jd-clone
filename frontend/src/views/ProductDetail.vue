@@ -71,12 +71,25 @@ function onVideoEnded() { videoPlaying.value = false }
 // flip the flag when the gallery's bottom edge crosses the top of viewport.
 const showFloatBar = ref(false)
 const galleryRef = ref(null)
+// ---- Feature: 详情阅读进度 (Detail Reading Progress) ----
+// Thin bar fixed at the very top of the page showing how far the user has
+// scrolled through the detail page (0-100%). Clamped to [0, 100].
+const readProgress = ref(0)
 function onFloatScroll() {
   const el = galleryRef.value
-  if (!el) return
-  // Trigger when the gallery has scrolled out of view at the top.
-  const rect = el.getBoundingClientRect()
-  showFloatBar.value = rect.bottom < 0
+  if (el) {
+    // Trigger when the gallery has scrolled out of view at the top.
+    const rect = el.getBoundingClientRect()
+    showFloatBar.value = rect.bottom < 0
+  }
+  // Reading progress: scrollTop / (scrollHeight - innerHeight).
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight
+  const scrollTop = window.scrollY || document.documentElement.scrollTop
+  if (docHeight > 0) {
+    readProgress.value = Math.min(100, Math.max(0, Math.round((scrollTop / docHeight) * 100)))
+  } else {
+    readProgress.value = 0
+  }
 }
 
 const showReview = ref(false)
@@ -887,6 +900,12 @@ onUnmounted(() => {
 <template>
   <div v-if="loading" class="loading"><van-loading /></div>
   <div v-else-if="product" class="detail">
+    <!-- Feature: 详情阅读进度 (Detail Reading Progress) — thin bar at the very
+         top showing scroll progress through the detail page (0-100%). Fixed so
+         it stays visible alongside the fixed nav-bar. -->
+    <div class="read-progress-bar">
+      <div class="rp-fill" :style="{ width: readProgress + '%' }"></div>
+    </div>
     <van-nav-bar title="商品详情" left-arrow @click-left="router.back()" fixed placeholder />
     <!-- Product intro video (商品视频介绍) -->
     <!-- Feature: 商品视频自动播放 — auto-plays (muted) when scrolled 50% into
@@ -1416,6 +1435,24 @@ onUnmounted(() => {
 
 <style scoped>
 .detail { padding-bottom: 60px; }
+/* Feature: 详情阅读进度 (Detail Reading Progress) */
+.read-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(225, 37, 27, 0.12);
+  z-index: 1000;
+  pointer-events: none;
+}
+.rp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff7a18, #e1251b);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 4px rgba(225, 37, 27, 0.6);
+}
 .loading { text-align: center; padding: 80px; }
 .product-video { background: #000; width: 100%; position: relative; }
 .pv-player { width: 100%; max-height: 280px; object-fit: contain; display: block; }

@@ -206,6 +206,16 @@ const pointsToNext = computed(() => {
   if (!nextLevel.value) return 0
   return Math.max(0, nextLevel.value.min - growthPoints.value)
 })
+// ---- Feature: 等级进度环 (Mine Level Progress Ring) ----
+// SVG stroke-dash math for the circular ring. r=52 → circumference ≈ 326.7.
+// The fill arc length is progressPct% of the circumference, rotated -90° so it
+// starts at the top of the circle (handled by the SVG CSS transform).
+const RING_RADIUS = 52
+const ringCircumference = computed(() => 2 * Math.PI * RING_RADIUS)
+const ringDashOffset = computed(() => {
+  const pct = nextLevel.value ? progressPct.value : 100
+  return ringCircumference.value * (1 - pct / 100)
+})
 
 async function load() {
   loggedIn.value = !!localStorage.getItem('jd_token')
@@ -324,28 +334,48 @@ function logout() {
     <!-- Member growth section (会员成长值) -->
     <div class="growth-card">
       <div class="gc-top">
-        <div class="gc-head">
-          <span class="gc-title">成长值</span>
-          <span class="gc-cur-badge" :class="currentLevel.cls">
-            <span class="badge-dot"></span>{{ currentLevel.name }}会员
-          </span>
+        <!-- Feature: 等级进度环 (Mine Level Progress Ring) — a circular SVG
+             progress ring replacing the linear growth bar. The ring shows the
+             current level name in its center and the progress arc fills by
+             progressPct toward the next level. -->
+        <div class="gc-ring" :style="{ '--ring-color': currentLevel.color }">
+          <svg viewBox="0 0 120 120" class="gc-ring-svg">
+            <circle class="gc-ring-track" cx="60" cy="60" r="52" fill="none" />
+            <circle
+              class="gc-ring-fill"
+              cx="60"
+              cy="60"
+              r="52"
+              fill="none"
+              :stroke-dasharray="ringCircumference"
+              :stroke-dashoffset="ringDashOffset"
+            />
+          </svg>
+          <div class="gc-ring-center">
+            <div class="gc-ring-pct">{{ progressPct }}%</div>
+            <div class="gc-ring-level">{{ currentLevel.name }}</div>
+          </div>
         </div>
-        <div class="gc-points">{{ growthPoints }}</div>
-      </div>
-
-      <div class="gc-bar">
-        <div class="gc-fill" :class="currentLevel.cls" :style="{ width: progressPct + '%' }"></div>
-      </div>
-      <div class="gc-progress-text">
-        <span>{{ currentLevel.name }}</span>
-        <span v-if="nextLevel">{{ nextLevel.name }}</span>
-        <span v-else>已达最高等级</span>
-      </div>
-      <div class="gc-next" v-if="nextLevel">
-        距下一等级还需 <b>{{ pointsToNext }}</b> 积分
-      </div>
-      <div class="gc-next gc-max" v-else>
-        恭喜！您已达最高等级
+        <div class="gc-top-info">
+          <div class="gc-head">
+            <span class="gc-title">成长值</span>
+            <span class="gc-cur-badge" :class="currentLevel.cls">
+              <span class="badge-dot"></span>{{ currentLevel.name }}会员
+            </span>
+          </div>
+          <div class="gc-points">{{ growthPoints }}</div>
+          <div class="gc-progress-text">
+            <span>{{ currentLevel.name }}</span>
+            <span v-if="nextLevel">{{ nextLevel.name }}</span>
+            <span v-else>已达最高等级</span>
+          </div>
+          <div class="gc-next" v-if="nextLevel">
+            距下一等级还需 <b>{{ pointsToNext }}</b> 积分
+          </div>
+          <div class="gc-next gc-max" v-else>
+            恭喜！您已达最高等级
+          </div>
+        </div>
       </div>
 
       <!-- Level badge ladder -->
@@ -548,7 +578,8 @@ function logout() {
   position: relative;
   z-index: 2;
 }
-.gc-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.gc-top { display: flex; align-items: center; gap: 16px; }
+.gc-top-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .gc-head { display: flex; align-items: center; gap: 8px; }
 .gc-title { font-size: 16px; font-weight: bold; color: #333; }
 .gc-points { font-size: 22px; font-weight: bold; color: #e1251b; font-family: 'Courier New', monospace; }
@@ -570,18 +601,48 @@ function logout() {
   box-shadow: 0 0 0 1px rgba(255,255,255,0.5);
 }
 
-/* progress bar */
-.gc-bar {
-  height: 10px;
-  background: #f0f0f0;
-  border-radius: 6px;
-  overflow: hidden;
-  margin: 12px 0 6px;
+/* Feature: 等级进度环 (Mine Level Progress Ring) — circular SVG ring */
+.gc-ring {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  flex-shrink: 0;
 }
-.gc-fill {
+.gc-ring-svg {
+  width: 100%;
   height: 100%;
-  border-radius: 6px;
-  transition: width 0.4s ease;
+  /* Rotate so the arc starts at the top (12 o'clock) instead of 3 o'clock. */
+  transform: rotate(-90deg);
+}
+.gc-ring-track {
+  stroke: #f0f0f0;
+  stroke-width: 10;
+}
+.gc-ring-fill {
+  stroke: var(--ring-color, #e1251b);
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+}
+.gc-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.gc-ring-pct {
+  font-size: 18px;
+  font-weight: bold;
+  color: #e1251b;
+  font-family: 'Courier New', monospace;
+  line-height: 1;
+}
+.gc-ring-level {
+  font-size: 11px;
+  color: #999;
 }
 .gc-progress-text {
   display: flex;

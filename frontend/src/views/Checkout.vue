@@ -36,6 +36,17 @@ const router = useRouter()
 const items = ref([])
 const address = ref('')
 const remark = ref('')
+// ---- Feature: 配送时间选择 (Checkout Delivery Time Slots) ----
+// Four delivery-time options. The chosen option is folded into the order
+// remark on submit (prefixed with 【配送时间】) so the backend stores it without
+// schema changes. Defaults to "不限时间".
+const DELIVERY_TIMES = [
+  { value: '不限时间', label: '不限时间' },
+  { value: '工作日送达', label: '工作日送达' },
+  { value: '周末送达', label: '周末送达' },
+  { value: '指定日期', label: '指定日期' },
+]
+const deliveryTime = ref('不限时间')
 const coupons = ref([])
 const addresses = ref([])
 const tieredDiscounts = ref([]) // active spend-X-get-Y-off tiers (阶梯满减)
@@ -294,11 +305,17 @@ async function submit() {
 // max-retries → contact support).
 async function attemptOrder() {
   try {
+    // Fold the chosen delivery time into the remark so the backend stores it
+    // alongside the user's free-text note without a schema change.
+    const dt = deliveryTime.value && deliveryTime.value !== '不限时间'
+      ? `【配送时间：${deliveryTime.value}】`
+      : ''
+    const finalRemark = dt + (remark.value || '')
     await createOrder({
       items: items.value.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
       address: address.value,
       user_coupon_id: selectedCouponId.value || undefined,
-      remark: remark.value,
+      remark: finalRemark,
     })
     // Reset retry state after a successful order.
     retryCount.value = 0
@@ -449,6 +466,24 @@ onUnmounted(() => {
       <van-field v-model="address" label="收货地址" placeholder="省市区 + 详细地址" rows="2" type="textarea" is-link v-if="addresses.length" @click="showAddrPicker = true" />
       <van-field v-model="address" label="收货地址" placeholder="省市区 + 详细地址" rows="2" type="textarea" v-else />
       <van-field v-model="remark" label="订单备注" placeholder="选填，如送货时间" />
+      <!-- Feature: 配送时间选择 (Checkout Delivery Time Slots) — 4 options.
+           Selection is folded into the order remark on submit. -->
+      <van-cell>
+        <template #title>
+          <div class="dt-label">🚚 配送时间</div>
+        </template>
+        <template #label>
+          <div class="dt-options">
+            <span
+              v-for="opt in DELIVERY_TIMES"
+              :key="opt.value"
+              class="dt-opt"
+              :class="{ active: deliveryTime === opt.value }"
+              @click="deliveryTime = opt.value"
+            >{{ opt.label }}</span>
+          </div>
+        </template>
+      </van-cell>
       <van-cell title="电子发票" is-link @click="showInvoice = true" :value="invoiceForm.title ? invoiceForm.title : '点击填写'" />
     </van-cell-group>
     <van-cell-group inset title="商品清单">
@@ -812,6 +847,38 @@ onUnmounted(() => {
 .invoice-form { padding: 20px; }
 .invoice-form h3 { text-align: center; margin-bottom: 16px; }
 .invoice-form .van-cell-group { border: 1px solid #eee; border-radius: 8px; }
+
+/* Feature: 配送时间选择 (Checkout Delivery Time Slots) */
+.dt-label {
+  font-size: 14px;
+  color: #323233;
+  font-weight: 500;
+}
+.dt-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.dt-opt {
+  display: inline-block;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #333;
+  background: #f7f8fa;
+  border: 1px solid #eee;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.dt-opt:active { transform: scale(0.97); }
+.dt-opt.active {
+  color: #fff;
+  background: #e1251b;
+  border-color: #e1251b;
+  font-weight: 600;
+}
 
 /* ---- Order success celebration (下单成功动画) ---- */
 .success-overlay {
