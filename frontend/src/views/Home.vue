@@ -192,6 +192,15 @@ function isNew(p) {
 function isSeckill(p) {
   return !!(p && p.is_seckill)
 }
+// Feature: 首页低库存闪烁徽标 (Home Limited Stock Flash) — a product is
+// "low stock" when it has a positive stock under 10. Stock is best-effort:
+// products without a numeric stock field never trigger the badge.
+function isLowStock(p) {
+  if (!p) return false
+  const s = Number(p.stock)
+  if (!Number.isFinite(s) || s <= 0) return false
+  return s < 10
+}
 
 // ---- Price trend tag (价格趋势图标) ----
 // Returns the inline trend tag for a product, shown next to its price.
@@ -468,6 +477,9 @@ onUnmounted(() => {
             <van-image width="100%" height="170" :src="p.image" fit="cover" radius="6" />
             <span v-if="isNew(p)" class="p-badge p-badge-new">NEW</span>
             <span v-if="isSeckill(p)" class="p-badge p-badge-seckill">限时</span>
+            <!-- Feature: 首页低库存闪烁徽标 (Home Limited Stock Flash) — a
+                 red flashing "⚡仅剩N件" badge when the product's stock < 10. -->
+            <span v-if="isLowStock(p)" class="p-badge p-badge-stock">⚡仅剩{{ p.stock }}件</span>
           </div>
           <div class="p-name van-multi-ellipsis--l2">{{ p.name }}</div>
           <div class="p-shop">{{ p.shop }}</div>

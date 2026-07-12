@@ -260,6 +260,29 @@ async function exportOrders() {
   }
 }
 
+// ---- Feature: 订单物流迷你跟踪 (Order Express Tracking Mini) ----
+// For shipped orders we show a compact express-tracking row: a mini logo emoji
+// (📦 / 🚚 / ✈️, chosen deterministically by order id so it's stable) and a
+// truncated waybill number "运单: JD****1234". The full number is derived from
+// the order id so the same order always shows the same waybill; the middle is
+// masked to mimic a real carrier's truncated tracking number.
+const EXPRESS_LOGOS = ['📦', '🚚', '✈️']
+function expressLogo(o) {
+  return EXPRESS_LOGOS[(Number(o.id) || 0) % EXPRESS_LOGOS.length]
+}
+// Build a deterministic 12-digit waybill and mask the middle: JD****<last4>.
+function expressWaybill(o) {
+  let h = 0
+  const s = 'JD' + String(o.id || '') + String(o.order_no || '')
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i)
+    h |= 0
+  }
+  const num = String(Math.abs(h)).slice(0, 10).padEnd(10, '0')
+  const last4 = num.slice(-4)
+  return `JD****${last4}`
+}
+
 // Resolve a grouping key for an order line. Prefer an explicit `shop` field
 // when the backend stores one; otherwise fall back to the brand/name prefix
 // (first whitespace-delimited token of the product name, e.g. "Apple",
@@ -543,7 +566,7 @@ async function downloadInvoice(o) {
               📦 <span class="o-pkg-label">包裹{{ pi + 1 }}</span>
               <span class="o-pkg-shop van-ellipsis">{{ pkg.key }}</span>
             </div>
-            <div v-for="(it, i) in pkg.items" :key="i" class="o-item">
+              <div v-for="(it, i) in pkg.items" :key="i" class="o-item">
               <van-image width="60" height="60" radius="6" :src="it.image" fit="cover" />
               <div class="oi-info">
                 <div class="oi-name van-ellipsis">{{ it.name }}</div>
@@ -551,6 +574,16 @@ async function downloadInvoice(o) {
               </div>
             </div>
           </div>
+        </div>
+        <!-- Feature: 订单物流迷你跟踪 — for shipped orders show a mini express
+             logo + truncated waybill number "运单: JD****1234". -->
+        <div v-if="o.status === 'shipped'" class="express-mini">
+          <span class="em-logo">{{ expressLogo(o) }}</span>
+          <span class="em-info">
+            <span class="em-label">运输中</span>
+            <span class="em-waybill">运单: {{ expressWaybill(o) }}</span>
+          </span>
+          <van-icon name="logistics" class="em-icon" />
         </div>
         <!-- Feature: 订单时间轴迷你图 (Order Timeline Mini Map) — a tiny 4-step
              horizontal progress bar (下单→付款→发货→收货) with the current step
@@ -718,6 +751,35 @@ async function downloadInvoice(o) {
 .oi-info { flex: 1; }
 .oi-name { font-size: 13px; }
 .oi-price { color: #999; font-size: 12px; margin-top: 4px; }
+/* Feature: 订单物流迷你跟踪 (Order Express Tracking Mini) */
+.express-mini {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, #fff7e6, #fff);
+  border: 1px solid #ffe7ba;
+  border-radius: 8px;
+}
+.em-logo {
+  font-size: 22px;
+  line-height: 1;
+  animation: em-bob 1.8s ease-in-out infinite;
+}
+@keyframes em-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.em-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.em-label { font-size: 12px; color: #ff7a18; font-weight: 600; }
+.em-waybill {
+  font-size: 13px;
+  color: #333;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.5px;
+}
+.em-icon { font-size: 18px; color: #ff9800; }
 /* Feature: 订单时间轴迷你图 (Order Timeline Mini Map) — compact 4-step bar */
 .o-mini-timeline {
   display: flex;

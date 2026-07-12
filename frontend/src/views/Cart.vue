@@ -1,8 +1,8 @@
 <script setup>
-import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showConfirmDialog } from 'vant'
-import { getCart, updateCart, deleteCart, createOrder, getProducts, addToCart, toggleFavorite, getTieredDiscounts } from '../api'
+import { getCart, updateCart, deleteCart, createOrder, getProducts, addToCart, toggleFavorite, getTieredDiscounts, getMyCoupons } from '../api'
 
 // ---- Group buy invite (好友拼单邀请) ----
 // A festive popup that generates shareable invite text for the current cart,
@@ -71,6 +71,17 @@ const items = ref([])
 const selectedTotal = ref(0)
 const allSelected = ref(true)
 const loading = ref(true)
+// ---- Feature: 购物车最佳优惠券自动选用 (Cart Best Coupon Auto-Apply) ----
+// Fetches the user's coupons alongside the cart. When the selected-items total
+// meets a coupon's threshold we automatically select the one with the highest
+// discount and surface a "已自动选用最佳优惠" toast. The user can override.
+// coupons: user-coupon rows (each has .is_used and .coupon{threshold,value,type}).
+const myCoupons = ref([])
+// The auto-selected user_coupon_id (null when nothing applies).
+const autoCouponId = ref(null)
+// Guard so the toast only fires when the selection actually changes (not on
+// every load where the same coupon remains best).
+let lastAutoCouponId = null
 // Per-item selected count ("已选N件"), derived from the client cart items so
 // the label stays accurate even before the server round-trip in load() settles.
 const selectedCount = computed(() => items.value.filter((i) => i.selected === 1).length)
@@ -131,14 +142,89 @@ async function load() {
     await loadRecommendations()
     // Load tiered-discount tiers (best-effort) to power the smart quantity hints.
     loadTiers()
+    // Feature: 购物车最佳优惠券自动选用 — fetch coupons then auto-apply the best.
+    await loadCoupons()
   } catch (e) {
     if (e.response?.status === 401) router.replace('/login')
   } finally {
     loading.value = false
   }
 }
+
+// ---- Feature: 购物车最佳优惠券自动选用 (Cart Best Coupon Auto-Apply) ----
+// Load the user's coupons (best-effort; failures just leave the list empty).
+async function loadCoupons() {
+  if (!localStorage.getItem('jd_token')) return
+  try {
+    myCoupons.value = (await getMyCoupons()) || []
+  } catch {
+    myCoupons.value = []
+  }
+  autoApplyBestCoupon()
+}
+
+// Compute the discount a user-coupon row would give on the current selected
+// total. Discount-type coupons use value as a fraction (e.g. 0.85 = 85折);
+// fixed coupons subtract their value directly. Returns 0 for unusable rows.
+function couponDiscount(uc) {
+  if (!uc || uc.is_used !== 0 || !uc.coupon) return 0
+  if (selectedTotal.value < uc.coupon.threshold) return 0
+  if (uc.coupon.coupon_type === 'discount') {
+    return Math.round(selectedTotal.value * (1 - uc.coupon.value) * 100) / 100
+  }
+  return Number(uc.coupon.value) || 0
+}
+
+// Pick the coupon with the highest discount among those whose threshold the
+// selected total meets. Returns the user-coupon row or null.
+function pickBestCoupon() {
+  let best = null
+  let bestDiscount = 0
+  for (const uc of myCoupons.value) {
+    const d = couponDiscount(uc)
+    if (d > bestDiscount) {
+      best = uc
+      bestDiscount = d
+    }
+  }
+  return best
+}
+
+// Auto-select the best coupon and toast when the selection changes. Called on
+// load and whenever the cart total/coupons change. Only toasts when a different
+// coupon becomes the best (avoids spamming on every cart mutation).
+function autoApplyBestCoupon() {
+  const best = pickBestCoupon()
+  const newId = best ? best.id : null
+  if (newId && newId !== lastAutoCouponId) {
+    autoCouponId.value = newId
+    lastAutoCouponId = newId
+    showSuccessToast('已自动选用最佳优惠')
+  } else if (!newId) {
+    autoCouponId.value = null
+    lastAutoCouponId = null
+  }
+}
+
+// Human-readable label for the currently auto-applied coupon, for the banner.
+const autoCouponLabel = computed(() => {
+  if (!autoCouponId.value) return ''
+  const uc = myCoupons.value.find((c) => c.id === autoCouponId.value)
+  if (!uc || !uc.coupon) return ''
+  const d = couponDiscount(uc)
+  if (uc.coupon.coupon_type === 'discount') {
+    return `已用 ${(uc.coupon.value * 10).toFixed(1)}折券 · 省 ¥${d.toFixed(2)}`
+  }
+  return `已用 满${uc.coupon.threshold}减${uc.coupon.value} · 省 ¥${d.toFixed(2)}`
+})
 onMounted(load)
 onActivated(load)
+
+// Feature: 购物车最佳优惠券自动选用 — re-evaluate the best coupon whenever the
+// selected total moves, so the auto-apply stays in sync with the live cart.
+watch(selectedTotal, () => {
+  if (!loading.value) autoApplyBestCoupon()
+})
 
 async function quickAdd(p) {
   try {
@@ -607,6 +693,14 @@ onUnmounted(() => {
         </span>
       </div>
 
+      <!-- Feature: 购物车最佳优惠券自动选用 — banner showing the auto-applied
+           best coupon (highest discount) once the selected total qualifies. -->
+      <div v-if="autoCouponLabel" class="auto-coupon-banner">
+        <span class="acb-icon">🎟️</span>
+        <span class="acb-text">{{ autoCouponLabel }}</span>
+        <span class="acb-tag">已自动选用</span>
+      </div>
+
       <!-- Feature: 配送时间选择 (Cart Delivery Time Slots) — pick a delivery
            window (不限/工作日/周末/指定日期); the choice is stored in the order
            remark at checkout. -->
@@ -814,6 +908,30 @@ onUnmounted(() => {
   border: 1px solid #ffd591;
   border-radius: 8px;
   padding: 8px 12px;
+}
+/* Feature: 购物车最佳优惠券自动选用 (Cart Best Coupon Auto-Apply) banner */
+.auto-coupon-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 10px 12px;
+  background: linear-gradient(90deg, #fff0ee, #fff7f6);
+  border: 1px solid #ffd9d3;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.acb-icon { font-size: 16px; flex-shrink: 0; }
+.acb-text { flex: 1; color: #e1251b; font-weight: 600; }
+.acb-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: #e1251b;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 /* Feature: 配送时间选择 (Cart Delivery Time Slots) */
 .delivery-card {

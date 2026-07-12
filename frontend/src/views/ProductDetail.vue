@@ -102,6 +102,35 @@ const reviewVideo = ref('')
 // Toggle the video URL input box inside the review form.
 const showVideoInput = ref(false)
 const favorited = ref(false)
+// ---- Feature: 分享次数统计 (Product Detail Share Count) ----
+// Tracks how many times each product has been shared in localStorage, keyed by
+// product id. The counter is shown as a small badge on the share button in the
+// bottom action bar and is incremented every time the share poster is opened.
+const shareCount = ref(0)
+function loadShareCount() {
+  try {
+    const map = JSON.parse(localStorage.getItem('jd_share_counts') || '{}')
+    shareCount.value = Number(map[route.params.id]) || 0
+  } catch {
+    shareCount.value = 0
+  }
+}
+// Persist the current share count for this product back to localStorage.
+function saveShareCount() {
+  try {
+    const map = JSON.parse(localStorage.getItem('jd_share_counts') || '{}')
+    map[route.params.id] = shareCount.value
+    localStorage.setItem('jd_share_counts', JSON.stringify(map))
+  } catch (_) {
+    // localStorage may be unavailable; ignore.
+  }
+}
+// Open the share poster and bump the per-product share counter.
+function openShare() {
+  showPoster.value = true
+  shareCount.value += 1
+  saveShareCount()
+}
 // Build the gallery list from the product's images field (comma-separated),
 // falling back to the single main image.
 const gallery = computed(() => {
@@ -388,6 +417,8 @@ onMounted(async () => {
     product.value = res.data
     reviews.value = res.reviews || []
     skus.value = res.skus || []
+    // Feature: 分享次数统计 — load this product's share counter on mount.
+    loadShareCount()
     // ---- 比价悬浮球: remember the last-viewed product so the Home page can
     // surface a floating price-tracking widget. We snapshot the id, name,
     // thumbnail and the price the user saw at this visit. On the next Home
@@ -612,6 +643,9 @@ function qrPattern(n) {
 }
 async function copyShareLink() {
   const link = window.location.href
+  // Feature: 分享次数统计 — a real share action, bump the per-product counter.
+  shareCount.value += 1
+  saveShareCount()
   try {
     await navigator.clipboard.writeText(link)
     showSuccessToast('链接已复制')
@@ -640,6 +674,9 @@ const longCardSpecs = computed(() => {
 // Copy the formatted product summary: "🔥 商品名 | 现价¥X 原价¥Y | 京东自营".
 async function copyProductInfo() {
   const name = product.value ? product.value.name : ''
+  // Feature: 分享次数统计 — generating the long-image summary counts as a share.
+  shareCount.value += 1
+  saveShareCount()
   const cur = fmt(currentPrice())
   const orig = product.value ? fmt(product.value.original_price) : '0.00'
   const tag = product.value && product.value.tags ? product.value.tags : '京东自营'
@@ -1284,7 +1321,9 @@ onUnmounted(() => {
     <!-- Bottom action bar -->
     <van-action-bar>
       <van-action-bar-icon icon="chat-o" text="客服" @click="showToast('客服功能为演示')" />
-      <van-action-bar-icon icon="share-o" text="分享" @click="showPoster = true" />
+      <!-- Feature: 分享次数统计 — share button carries a per-product counter
+           badge ("分享N次"); opening the poster bumps the persisted counter. -->
+      <van-action-bar-icon icon="share-o" :text="'分享' + (shareCount > 0 ? shareCount + '次' : '')" @click="openShare" />
       <van-action-bar-icon :icon="favorited ? 'star' : 'star-o'" :text="favorited ? '已收藏' : '收藏'" :color="favorited ? '#e1251b' : '#323233'" @click="doFavorite" />
       <van-action-bar-icon icon="cart-o" text="购物车" @click="router.push('/cart')" />
       <van-action-bar-button color="#ff976a" type="warning" text="加入购物车" @click="doAddCart" />
