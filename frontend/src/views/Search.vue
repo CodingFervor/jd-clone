@@ -136,7 +136,20 @@ onUnmounted(() => {
 })
 
 // Popular search terms (hot searches). Used as clickable tags above results.
-const hotSearches = ['iPhone 15', '华为', '空调', '笔记本', '球鞋', '扫地机器人', '蓝牙耳机', '冰箱']
+// Each entry carries a deterministic "热度" count so the hottest terms can show
+// an animated flame icon.
+const HOT_RAW = ['iPhone 15', '华为', '空调', '笔记本', '球鞋', '扫地机器人', '蓝牙耳机', '冰箱']
+const hotSearches = HOT_RAW.map((text, i) => {
+  // Deterministic hot count in [120, 9800] from a simple index-based hash.
+  const seed = (i + 1) * 2654435761
+  const count = 120 + (Math.abs(seed) % 9680)
+  return { text, count }
+})
+// Threshold above which a hot term gets the flame icon.
+const HOT_FLAME_THRESHOLD = 2000
+function isHot(h) {
+  return (h.count || 0) >= HOT_FLAME_THRESHOLD
+}
 
 // The discover panel (history + hot searches) shows when the input is focused
 // or the user is typing and hasn't committed a search yet.
@@ -289,8 +302,8 @@ function fmt(n) {
       <div class="hot">
         <div class="h-head">热门搜索</div>
         <div class="h-tags">
-          <van-tag v-for="h in hotSearches" :key="h" round type="primary" plain size="medium" @mousedown.prevent="doSearch(h)">
-            {{ h }}
+          <van-tag v-for="h in hotSearches" :key="h.text" round type="primary" plain size="medium" @mousedown.prevent="doSearch(h.text)">
+            <span v-if="isHot(h)" class="hot-flame">🔥</span>{{ h.text }}
           </van-tag>
         </div>
       </div>
@@ -343,7 +356,7 @@ function fmt(n) {
       <div class="hot">
         <div class="h-head">热门搜索</div>
         <div class="h-tags">
-          <van-tag v-for="h in hotSearches" :key="h" round type="primary" plain size="medium" @click="doSearch(h)">{{ h }}</van-tag>
+          <van-tag v-for="h in hotSearches" :key="h.text" round type="primary" plain size="medium" @click="doSearch(h.text)"><span v-if="isHot(h)" class="hot-flame">🔥</span>{{ h.text }}</van-tag>
         </div>
       </div>
     </div>
@@ -432,4 +445,19 @@ function fmt(n) {
 .ri-name { font-size: 13px; line-height: 18px; }
 .ri-price { color: #e1251b; font-size: 16px; font-weight: bold; margin-top: 6px; }
 .ri-sales { color: #999; font-size: 11px; }
+
+/* Feature: 热门搜索火焰图标 (Search Trending Fire Icon) */
+.hot-flame {
+  display: inline-block;
+  margin-right: 3px;
+  font-size: 14px;
+  line-height: 1;
+  vertical-align: -2px;
+  animation: hot-flame-flicker 0.9s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+@keyframes hot-flame-flicker {
+  0%, 100% { transform: scale(1) rotate(-4deg); opacity: 1; }
+  50% { transform: scale(1.25) rotate(4deg); opacity: 0.85; }
+}
 </style>

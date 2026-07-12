@@ -65,6 +65,20 @@ function unmuteVideo() {
 function onVideoPlay() { videoPlaying.value = true }
 function onVideoPause() { videoPlaying.value = false }
 function onVideoEnded() { videoPlaying.value = false }
+// ---- Feature: 悬浮购买条 (Floating Buy Bar) ----
+// Show a fixed bottom bar with thumbnail+price+buy button once the user has
+// scrolled past the product image gallery. We listen to window scroll and
+// flip the flag when the gallery's bottom edge crosses the top of viewport.
+const showFloatBar = ref(false)
+const galleryRef = ref(null)
+function onFloatScroll() {
+  const el = galleryRef.value
+  if (!el) return
+  // Trigger when the gallery has scrolled out of view at the top.
+  const rect = el.getBoundingClientRect()
+  showFloatBar.value = rect.bottom < 0
+}
+
 const showReview = ref(false)
 const reviewRating = ref(5)
 const reviewContent = ref('')
@@ -380,6 +394,9 @@ onMounted(async () => {
     nextTick(() => {
       setupSectionObserver()
       setupVideoObserver()
+      // Feature: 悬浮购买条 — attach scroll listener to toggle the float bar.
+      onFloatScroll()
+      window.addEventListener('scroll', onFloatScroll, { passive: true })
     })
   }
 })
@@ -810,6 +827,8 @@ function captureAR() {
 }
 
 onUnmounted(() => {
+  // Feature: 悬浮购买条 — remove scroll listener.
+  window.removeEventListener('scroll', onFloatScroll)
   if (sectionObserver) {
     sectionObserver.disconnect()
     sectionObserver = null
@@ -866,7 +885,7 @@ onUnmounted(() => {
     <!-- Feature: 商品3D展示 — a 360° button on the gallery switches the main image
          into a rotating mode that auto-cycles 4 product images inside a CSS
          perspective container. Products with only a single image show a toast. -->
-    <div class="gallery-wrap">
+    <div class="gallery-wrap" ref="galleryRef">
       <!-- Rotating mode: 4 frames cycling with a rotateY animation -->
       <div v-if="rotateMode" class="rotate-stage">
         <div class="rotate-scene">
@@ -1330,6 +1349,20 @@ onUnmounted(() => {
         <p class="ar-capture-hint">点击截图保存</p>
       </div>
     </div>
+
+    <!-- Feature: 悬浮购买条 (Floating Buy Bar) — appears after scrolling past the
+         image gallery. Shows thumbnail + price + buy/cart buttons. -->
+    <transition name="floatbar-slide">
+      <div v-if="showFloatBar" class="float-buy-bar">
+        <van-image width="42" height="42" radius="6" :src="product.image" fit="cover" class="fbb-thumb" />
+        <div class="fbb-info">
+          <div class="fbb-price">¥{{ fmt(currentPrice()) }}</div>
+          <div class="fbb-stock" :style="{ color: stockMeter.color }">{{ stockMeter.label }}</div>
+        </div>
+        <button class="fbb-btn fbb-cart" @click="doAddCart">加入购物车</button>
+        <button class="fbb-btn fbb-buy" @click="buyNow">立即购买</button>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -1904,5 +1937,48 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.8);
   font-size: 12px;
   margin: 0;
+}
+
+/* Feature: 悬浮购买条 (Floating Buy Bar) */
+.float-buy-bar {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: 56px; /* sit just above the bottom action bar */
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.14);
+}
+.fbb-thumb { flex-shrink: 0; }
+.fbb-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fbb-price { font-size: 17px; font-weight: bold; color: #e1251b; line-height: 1.1; }
+.fbb-stock { font-size: 11px; line-height: 1.2; }
+.fbb-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fbb-btn:active { opacity: 0.85; }
+.fbb-cart { background: linear-gradient(90deg, #ffb74d, #ff9800); }
+.fbb-buy { background: linear-gradient(90deg, #ff5858, #e1251b); }
+/* Slide-up transition */
+.floatbar-slide-enter-active,
+.floatbar-slide-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.floatbar-slide-enter-from,
+.floatbar-slide-leave-to {
+  opacity: 0;
+  transform: translateY(20px);
 }
 </style>

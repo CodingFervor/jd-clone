@@ -57,8 +57,63 @@ const treesEquivalent = computed(() => Number((co2Saved.value / KG_CO2_PER_TREE)
 // ---- Quick stats dashboard (个人中心速览) ----
 // Counts shown at the top of the Mine page: orders, favorites, coupons, points.
 const stats = ref({ orders: 0, favorites: 0, coupons: 0, points: 0 })
+// Keep the raw order list so the spending overview can compute totals.
+const orderList = ref([])
 function goStat(path) {
   router.push(path)
+}
+
+// ---- Feature: 消费概览 (Mine Spending Stats) ----
+// Total spent = sum of completed orders' totals. Average order value = total /
+// completed count. The 3-bar monthly trend uses deterministic demo data derived
+// from a hash of the username so the chart is stable per user.
+function userHash() {
+  try {
+    const u = JSON.parse(localStorage.getItem('jd_user') || '{}')
+    const s = String(u.username || u.nickname || 'jd')
+    let h = 0
+    for (let i = 0; i < s.length; i++) {
+      h = (h << 5) - h + s.charCodeAt(i)
+      h |= 0
+    }
+    return Math.abs(h)
+  } catch {
+    return 0
+  }
+}
+const completedOrderList = computed(() =>
+  orderList.value.filter((o) => o && o.status === 'completed')
+)
+const totalSpent = computed(() =>
+  completedOrderList.value.reduce((s, o) => s + Number(o.total || 0), 0)
+)
+const avgOrderValue = computed(() => {
+  const n = completedOrderList.value.length
+  if (!n) return 0
+  return totalSpent.value / n
+})
+// 3-bar monthly trend (last 3 "months"), deterministic demo data.
+const monthTrend = computed(() => {
+  const seed = userHash()
+  const base = Math.max(100, totalSpent.value / 3 || 200)
+  const months = []
+  const now = new Date()
+  for (let i = 2; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const label = `${d.getMonth() + 1}月`
+    // Deterministic variation around the base for each month.
+    const variance = (((seed >> (i * 4)) & 0x0f) / 15) * 0.8 + 0.6 // 0.6 - 1.4
+    const value = Math.round(base * variance)
+    months.push({ label, value })
+  }
+  return months
+})
+// Max value across the 3 bars, used to scale bar heights.
+const monthTrendMax = computed(() =>
+  Math.max(1, ...monthTrend.value.map((m) => m.value))
+)
+function fmtMoney(n) {
+  return Number(n).toFixed(2)
 }
 
 // ---- Dark mode (深色模式) ----
@@ -146,9 +201,10 @@ async function loadStats() {
       getMyCoupons().catch(() => []),
       getCheckInStatus().catch(() => ({})),
     ])
-    const orderList = orders || []
+    const orderListRaw = orders || []
+    orderList.value = orderListRaw
     stats.value = {
-      orders: orderList.length,
+      orders: orderListRaw.length,
       favorites: (favs || []).length,
       // "Unused" coupon count = coupons not yet redeemed/expired.
       coupons: (mine || []).filter((c) => c && !c.used).length,
@@ -156,7 +212,7 @@ async function loadStats() {
     }
     // Carbon-footprint inputs: check-in streak + completed orders.
     checkInStreak.value = (ci.last && Number(ci.last.streak)) || 0
-    completedOrders.value = orderList.filter(
+    completedOrders.value = orderListRaw.filter(
       (o) => o && o.status === 'completed'
     ).length
   } catch (_) {
@@ -284,6 +340,40 @@ function logout() {
         您的绿色消费已减少 <b>{{ co2Saved }}</b> kg碳排放
       </div>
       <div class="carbon-sub">相当于种了 <b>{{ treesEquivalent }}</b> 棵树</div>
+    </div>
+
+    <!-- Feature: 消费概览 (Mine Spending Stats) — total spent, average order
+         value, and a 3-bar monthly trend mini chart using deterministic data. -->
+    <div class="spend-card">
+      <div class="spend-head">
+        <span class="spend-title">💰 消费概览</span>
+        <span class="spend-orders">已完成 {{ completedOrderList.length }} 单</span>
+      </div>
+      <div class="spend-row">
+        <div class="spend-metric">
+          <div class="sm-label">累计消费</div>
+          <div class="sm-value sm-primary">¥{{ fmtMoney(totalSpent) }}</div>
+        </div>
+        <div class="spend-divider"></div>
+        <div class="spend-metric">
+          <div class="sm-label">客单均价</div>
+          <div class="sm-value">¥{{ fmtMoney(avgOrderValue) }}</div>
+        </div>
+      </div>
+      <div class="spend-trend">
+        <div class="st-label">近3月消费趋势</div>
+        <div class="st-chart">
+          <div v-for="(m, i) in monthTrend" :key="i" class="st-col">
+            <div class="st-bar-track">
+              <div
+                class="st-bar"
+                :style="{ height: Math.round((m.value / monthTrendMax) * 100) + '%' }"
+              ></div>
+            </div>
+            <div class="st-month">{{ m.label }}</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Order entries -->
@@ -563,5 +653,104 @@ function logout() {
   color: #07c160;
   font-size: 16px;
   font-weight: bold;
+}
+
+/* ---- Feature: 消费概览 (Mine Spending Stats) ---- */
+.spend-card {
+  margin: -8px 16px 12px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  position: relative;
+  z-index: 2;
+}
+.spend-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.spend-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+.spend-orders {
+  font-size: 11px;
+  color: #fff;
+  background: #e1251b;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+.spend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.spend-metric {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.spend-divider {
+  width: 1px;
+  height: 32px;
+  background: #eee;
+}
+.sm-label {
+  font-size: 12px;
+  color: #999;
+}
+.sm-value {
+  font-size: 20px;
+  font-weight: bold;
+  color: #333;
+  font-family: 'Courier New', monospace;
+}
+.sm-primary {
+  color: #e1251b;
+}
+.spend-trend {
+  margin-top: 14px;
+}
+.st-label {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 8px;
+}
+.st-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  height: 80px;
+}
+.st-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+.st-bar-track {
+  flex: 1;
+  width: 22px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.st-bar {
+  width: 100%;
+  min-height: 6px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, #ff9800, #e1251b);
+  transition: height 0.4s ease;
+}
+.st-month {
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
 }
 </style>

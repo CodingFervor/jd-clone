@@ -374,6 +374,83 @@ function markReviewedFromOrder(o) {
     reviewTick.value++
   }
 }
+
+// ---- Feature: 下载发票 (Order Invoice Download) ----
+// Build a text-based invoice summary for a completed order and copy it to the
+// clipboard. The invoice carries a deterministic invoice number derived from
+// the order id, the buyer's username, the line items, totals and an issue date.
+function invoiceNo(o) {
+  // Deterministic 8-digit invoice number from the order id.
+  let h = 0
+  const s = String(o.id || '')
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i)
+    h |= 0
+  }
+  return ('E' + (Math.abs(h) % 100000000)).padStart(9, '0')
+}
+
+function todayStr() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+function buyerName() {
+  try {
+    const u = JSON.parse(localStorage.getItem('jd_user') || '{}')
+    return (u && (u.nickname || u.username)) || '京东用户'
+  } catch {
+    return '京东用户'
+  }
+}
+
+function buildInvoice(o) {
+  const items = parseItems(o.items_json)
+  const lines = items.map(
+    (it) => `  ${it.name}  ${it.quantity} x ¥${fmt(it.price)} = ¥${fmt(it.price * it.quantity)}`
+  )
+  return [
+    '================================',
+    '         京东电子发票(普通发票)',
+    '================================',
+    `发票号码: ${invoiceNo(o)}`,
+    `开票日期: ${todayStr()}`,
+    `购方名称: ${buyerName()}`,
+    `订单编号: ${o.order_no}`,
+    '--------------------------------',
+    '商品明细:',
+    ...lines,
+    '--------------------------------',
+    `价税合计: ¥${fmt(o.total)}`,
+    `开票状态: 已开具`,
+    '================================',
+    '本发票为电子发票，与纸质发票具有同等法律效力。',
+  ].join('\n')
+}
+
+async function downloadInvoice(o) {
+  const text = buildInvoice(o)
+  try {
+    await navigator.clipboard.writeText(text)
+    showSuccessToast('发票已生成并复制到剪贴板')
+  } catch (e) {
+    // Fallback for non-secure contexts / older browsers.
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try {
+      document.execCommand('copy')
+      showSuccessToast('发票已生成并复制到剪贴板')
+    } catch {
+      showToast('复制失败，请手动复制')
+    }
+    document.body.removeChild(ta)
+  }
+}
 </script>
 
 <template>
@@ -448,6 +525,7 @@ function markReviewedFromOrder(o) {
             <van-button v-if="o.status === 'pending'" size="small" type="danger" round @click="pay(o)">去支付</van-button>
             <van-button v-if="o.status === 'pending'" size="small" plain round @click="cancel(o)">取消订单</van-button>
             <van-button v-if="o.status === 'completed'" size="small" type="danger" round @click="repurchase(o)">再次购买</van-button>
+            <van-button v-if="o.status === 'completed'" size="small" plain round @click="downloadInvoice(o)">📥下载发票</van-button>
             <van-button v-if="['shipped','completed'].includes(o.status)" size="small" type="danger" round @click="confirm(o)">确认收货</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请售后</van-button>

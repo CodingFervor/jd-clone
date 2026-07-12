@@ -416,9 +416,47 @@ onUnmounted(() => {
   <div class="cart-page">
     <van-nav-bar title="购物车" fixed placeholder />
     <div v-if="loading" class="loading"><van-loading /></div>
-    <van-empty v-else-if="!items.length" description="购物车是空的">
-      <van-button type="danger" round @click="router.push('/home')">去逛逛</van-button>
-    </van-empty>
+    <!-- Feature: 购物车空状态插画 (Cart Empty State) — fun animated emoji
+         shopping bag + "去逛逛" button + "为你推荐" suggestions below. -->
+    <div v-else-if="!items.length" class="empty-cart">
+      <div class="empty-illustration">
+        <div class="ec-bag">🛍️</div>
+        <div class="ec-coin ec-c1">💰</div>
+        <div class="ec-coin ec-c2">🎁</div>
+        <div class="ec-coin ec-c3">✨</div>
+      </div>
+      <div class="empty-text">购物车空空如也</div>
+      <div class="empty-sub">快去挑选心仪的好物吧～</div>
+      <van-button class="empty-go-btn" type="danger" round @click="router.push('/home')">去逛逛</van-button>
+
+      <div v-if="recommendations.length" class="empty-rec">
+        <div class="empty-rec-head">
+          <span class="err-line"></span>
+          <span class="err-title">为你推荐</span>
+          <span class="err-line"></span>
+        </div>
+        <div class="empty-rec-grid">
+          <div
+            v-for="p in recommendations"
+            :key="p.id"
+            class="empty-rec-card"
+            @click="router.push('/product/' + p.id)"
+          >
+            <van-image width="100%" height="130" radius="6" :src="p.image" fit="cover" />
+            <div class="err-name van-multi-ellipsis--l2">{{ p.name }}</div>
+            <div class="err-bottom">
+              <span class="err-price">¥{{ fmt(p.price) }}</span>
+              <van-button
+                size="mini"
+                type="danger"
+                round
+                @click.stop="quickAdd(p)"
+              >加购</van-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div v-else>
       <!-- 猜你喜欢: horizontally scrollable recommended products -->
       <div v-if="recommendations.length" class="rec-section">
@@ -830,5 +868,111 @@ onUnmounted(() => {
   85% { transform: rotate(-18deg); }
   90% { transform: rotate(18deg); }
   95% { transform: rotate(-12deg); }
+}
+
+/* Feature: 购物车空状态插画 (Cart Empty State) */
+.empty-cart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 16px 16px;
+}
+.empty-illustration {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ec-bag {
+  font-size: 84px;
+  line-height: 1;
+  display: inline-block;
+  animation: ec-bounce 1.8s ease-in-out infinite;
+  filter: drop-shadow(0 6px 12px rgba(225, 37, 27, 0.25));
+}
+@keyframes ec-bounce {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-12px) rotate(3deg); }
+}
+.ec-coin {
+  position: absolute;
+  font-size: 22px;
+  display: inline-block;
+}
+.ec-c1 { top: 8px; right: 6px; animation: ec-float 2.4s ease-in-out infinite; }
+.ec-c2 { bottom: 14px; left: 0; animation: ec-float 2.4s ease-in-out infinite 0.6s; }
+.ec-c3 { top: 20px; left: 14px; font-size: 16px; animation: ec-float 2.4s ease-in-out infinite 1.2s; }
+@keyframes ec-float {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.9; }
+  50% { transform: translateY(-10px) scale(1.15); opacity: 1; }
+}
+.empty-text {
+  margin-top: 16px;
+  font-size: 17px;
+  font-weight: bold;
+  color: #333;
+}
+.empty-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #999;
+}
+.empty-go-btn {
+  margin-top: 18px;
+  padding: 0 32px;
+  font-weight: 600;
+  background: linear-gradient(90deg, #e1251b, #ff7a18);
+  border: none;
+}
+.empty-rec {
+  width: 100%;
+  margin-top: 24px;
+}
+.empty-rec-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.err-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #eee, transparent);
+}
+.err-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e1251b;
+}
+.empty-rec-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.empty-rec-card {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 6px;
+  overflow: hidden;
+}
+.err-name {
+  font-size: 12px;
+  line-height: 16px;
+  height: 32px;
+  padding: 4px 2px 0;
+}
+.err-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 2px 2px;
+}
+.err-price {
+  font-size: 15px;
+  font-weight: bold;
+  color: #e1251b;
 }
 </style>

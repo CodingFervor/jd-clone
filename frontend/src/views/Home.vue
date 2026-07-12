@@ -231,6 +231,35 @@ function goTag(tag) {
   router.push({ path: '/search', query: { q: tag } })
 }
 
+// ---- Feature: 首页天气小组件 (Home Weather Widget) ----
+// Deterministic weather (sunny/rainy/cloudy) + temperature derived from a hash
+// of today's date, so the same day always shows the same weather. Includes a
+// "适合购物" shopping tip.
+function dateHash() {
+  const d = new Date()
+  const s = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+  let h = 0
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i)
+    h |= 0
+  }
+  return Math.abs(h)
+}
+const WEATHER_STATES = [
+  { icon: '☀️', label: '晴', tip: '阳光明媚，适合购物', color: '#ff9800' },
+  { icon: '☁️', label: '多云', tip: '天气舒适，适合购物', color: '#7cb342' },
+  { icon: '🌧️', label: '小雨', tip: '雨天宅家，适合购物', color: '#42a5f5' },
+]
+const weather = WEATHER_STATES[dateHash() % WEATHER_STATES.length]
+// Deterministic temperature in [18, 32].
+const weatherTemp = computed(() => 18 + (dateHash() % 15))
+const weatherDateStr = computed(() => {
+  const d = new Date()
+  const wk = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()]
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${wk}`
+})
+
 // ---- Auto-scroll promo marquee (首页跑马灯) ----
 // Five promotional messages scrolled horizontally below the flash banner.
 // Each entry carries the display text (without the emoji prefix) and a longer
@@ -288,6 +317,23 @@ onUnmounted(() => {
         height="160"
         src="https://img12.360buyimg.com/babel/s1180x270_jfs/t1/banner-jd.jpg"
       />
+    </div>
+
+    <!-- Feature: 首页天气小组件 (Home Weather Widget) — deterministic weather
+         + temperature card with a "适合购物" shopping tip. -->
+    <div class="weather-card">
+      <div class="wc-icon" :style="{ color: weather.color }">{{ weather.icon }}</div>
+      <div class="wc-info">
+        <div class="wc-top">
+          <span class="wc-temp">{{ weatherTemp }}°</span>
+          <span class="wc-label">{{ weather.label }}</span>
+        </div>
+        <div class="wc-date">{{ weatherDateStr }}</div>
+      </div>
+      <div class="wc-tip">
+        <span class="wc-tip-icon">🛒</span>
+        <span class="wc-tip-text">{{ weather.tip }}</span>
+      </div>
     </div>
 
     <!-- Category grid -->
@@ -441,6 +487,64 @@ onUnmounted(() => {
   margin: 8px;
   border-radius: 8px;
   overflow: hidden;
+}
+
+/* Feature: 首页天气小组件 (Home Weather Widget) */
+.weather-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 8px 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #e3f2fd 0%, #e8f5e9 60%, #fff8e1 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.wc-icon {
+  font-size: 34px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.wc-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.wc-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.wc-temp {
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+  font-family: 'Courier New', monospace;
+}
+.wc-label {
+  font-size: 13px;
+  color: #666;
+}
+.wc-date {
+  font-size: 11px;
+  color: #999;
+}
+.wc-tip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(225, 37, 27, 0.9);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.wc-tip-icon {
+  font-size: 13px;
 }
 .cat-grid {
   display: grid;
